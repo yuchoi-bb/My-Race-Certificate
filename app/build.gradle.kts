@@ -9,7 +9,7 @@ val buildNumber = (project.findProperty("buildNumber") as String? ?: "1").toInt(
 
 android {
     namespace = "com.yuchoi.racecert"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.yuchoi.racecert"

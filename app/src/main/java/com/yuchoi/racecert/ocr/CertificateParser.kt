@@ -17,9 +17,10 @@ object CertificateParser {
         val type: RaceType? = null,
     )
 
-    private val timeRegex = Regex("""\b(\d{1,2}:\d{2}:\d{2})(?:\.\d+)?\b""")
+    // 완주 시간 후보. 디지털 폰트에서 0→O, 1→I 로 오인식되는 경우까지 허용해서 잡는다.
+    private val timeTokenRegex = Regex("""([0-9OoIl]{1,2}):([0-9OoIl]{2}):([0-9OoIl]{2})""")
     private val distanceKmRegex = Regex("""(\d{1,3}(?:\.\d+)?)\s?[Kk][Mm]?\b""")
-    private val isoDateRegex = Regex("""(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})""")
+    private val isoDateRegex = Regex("""(\d{4})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{1,2})""")
     private val koreanDateRegex = Regex("""(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일""")
     private val monthNameDateRegex = Regex(
         """([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})""",
@@ -30,10 +31,12 @@ object CertificateParser {
         "jul" to 7, "aug" to 8, "sep" to 9, "oct" to 10, "nov" to 11, "dec" to 12,
     )
 
-    private val titleKeywords = listOf(
-        "MARATHON", "RUN", "RACE", "FONDO", "GRANFONDO", "TRIATHLON", "IRONMAN",
-        "마라톤", "대회", "그란폰도", "철인", "트라이애슬론",
+    // 한국어 대회명(가장 구체적). 영문 부제보다 우선한다.
+    private val strongTitleKeywords = listOf(
+        "마라톤", "철인", "트라이애슬론", "그란폰도",
+        "FONDO", "IRONMAN", "TRIATHLON",
     )
+    private val fallbackTitleKeywords = listOf("MARATHON", "RUN", "RACE", "대회")
 
     fun parse(text: String): Parsed {
         if (text.isBlank()) return Parsed()
@@ -42,26 +45,51 @@ object CertificateParser {
         return Parsed(
             title = findTitle(lines),
             date = findDate(text),
-            recordTime = timeRegex.find(text)?.groupValues?.get(1),
+            recordTime = findRecordTime(text),
             distance = findDistance(text),
             type = findType(text),
         )
     }
 
     private fun findTitle(lines: List<String>): String? {
-        // 대회명 키워드가 들어간 줄을 우선 선택
-        val keywordLine = lines.firstOrNull { line ->
-            titleKeywords.any { line.contains(it, ignoreCase = true) } &&
-                !line.contains("CERTIFICATE", ignoreCase = true)
+        lines.firstOrNull { line -> strongTitleKeywords.any { line.contains(it, ignoreCase = true) } }
+            ?.let { return it }
+        lines.firstOrNull { line ->
+            fallbackTitleKeywords.any { line.contains(it, ignoreCase = true) } &&
+                !line.contains("CERTIFICATE", ignoreCase = true) &&
+                !line.contains("RECORD", ignoreCase = true)
+        }?.let { return it }
+        return lines.firstOrNull { it.length in 4..40 }
+    }
+
+    private fun normalizeDigits(s: String): String = buildString {
+        for (c in s) append(
+            when (c) {
+                'O', 'o' -> '0'
+                'I', 'l' -> '1'
+                else -> c
+            },
+        )
+    }
+
+    private fun findRecordTime(text: String): String? {
+        for (m in timeTokenRegex.findAll(text)) {
+            val h = normalizeDigits(m.groupValues[1]).toIntOrNull() ?: continue
+            val min = normalizeDigits(m.groupValues[2]).toIntOrNull() ?: continue
+            val sec = normalizeDigits(m.groupValues[3]).toIntOrNull() ?: continue
+            // 마라톤 완주 시간은 0~29시간 범위. 집결/출발 시각(HH:MM)은 3그룹이 아니라 걸리지 않는다.
+            if (h in 0..29 && min in 0..59 && sec in 0..59) {
+                return "%02d:%02d:%02d".format(h, min, sec)
+            }
         }
-        return keywordLine ?: lines.firstOrNull { it.length in 4..40 }
+        return null
     }
 
     private fun findDistance(text: String): String? {
         when {
-            text.contains("하프", ignoreCase = true) ||
+            text.contains("하프") ||
                 Regex("""\bhalf\b""", RegexOption.IGNORE_CASE).containsMatchIn(text) -> return "하프"
-            text.contains("풀코스") ||
+            text.contains("풀코스") || text.contains("풀") ||
                 Regex("""\bfull\b""", RegexOption.IGNORE_CASE).containsMatchIn(text) ||
                 text.contains("42.195") -> return "풀코스"
         }
@@ -79,7 +107,7 @@ object CertificateParser {
     }
 
     private fun findDate(text: String): LocalDate? {
-        isoDateRegex.find(text)?.let { m ->
+        koreanDateRegex.find(text)?.let { m ->
             runCatching {
                 return LocalDate.of(
                     m.groupValues[1].toInt(),
@@ -88,7 +116,7 @@ object CertificateParser {
                 )
             }
         }
-        koreanDateRegex.find(text)?.let { m ->
+        isoDateRegex.find(text)?.let { m ->
             runCatching {
                 return LocalDate.of(
                     m.groupValues[1].toInt(),

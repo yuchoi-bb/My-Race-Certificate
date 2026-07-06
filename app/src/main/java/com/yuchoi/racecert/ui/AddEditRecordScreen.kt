@@ -1,9 +1,13 @@
 package com.yuchoi.racecert.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -75,6 +79,31 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 private val formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
+
+/**
+ * ACTION_GET_CONTENT를 앱 선택창(chooser)으로 감싸서 실행한다.
+ * GetMultipleContents는 기본 앱(구글포토)으로 바로 열리므로, 기기 갤러리 등
+ * 다른 앱도 고를 수 있도록 항상 선택창을 띄운다. 다중 선택 지원.
+ */
+private class PickImagesViaChooser : ActivityResultContract<Unit, List<Uri>>() {
+    override fun createIntent(context: Context, input: Unit): Intent {
+        val getContent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = "image/*"
+            addCategory(Intent.CATEGORY_OPENABLE)
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        return Intent.createChooser(getContent, "사진을 가져올 앱 선택")
+    }
+
+    override fun parseResult(resultCode: Int, intent: Intent?): List<Uri> {
+        if (resultCode != Activity.RESULT_OK || intent == null) return emptyList()
+        val clip = intent.clipData
+        if (clip != null) {
+            return (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
+        }
+        return listOfNotNull(intent.data)
+    }
+}
 
 /** OCR 완료 후 필수 항목(대회 이름·날짜·기록) 인식 결과 요약 */
 private data class OcrSummary(
@@ -185,12 +214,14 @@ fun AddEditRecordScreen(
         ActivityResultContracts.PickMultipleVisualMedia(RaceRecord.MAX_IMAGES)
     ) { uris -> handlePickedUris(uris) }
 
-    // 구글포토 앱 등 다른 갤러리 앱에서 직접 선택 (다중 선택 지원)
+    // 기기 갤러리·구글포토 등 앱 선택창을 띄워 가져오기 (다중 선택 지원)
     val contentPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetMultipleContents()
+        PickImagesViaChooser()
     ) { uris -> handlePickedUris(uris) }
 
     var showPhotoSourceDialog by remember { mutableStateOf(false) }
+    // 탭한 썸네일을 크게 보는 미리보기
+    var previewPath by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -284,6 +315,7 @@ fun AddEditRecordScreen(
                     }
                 },
                 onRemove = { path -> imagePaths.remove(path) },
+                onPreview = { path -> previewPath = path },
             )
             Spacer(Modifier.height(8.dp))
 
@@ -364,6 +396,30 @@ fun AddEditRecordScreen(
         }
     }
 
+    // 썸네일 탭 → 전체 화면 미리보기 (아무 곳이나 탭하면 닫힘)
+    previewPath?.let { path ->
+        androidx.compose.ui.window.Dialog(onDismissRequest = { previewPath = null }) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable { previewPath = null },
+                contentAlignment = Alignment.Center,
+            ) {
+                val bitmap = rememberSampledBitmap(path, reqSizePx = 2048)
+                if (bitmap != null) {
+                    ForegroundImage(
+                        bitmap = bitmap,
+                        contentDescription = "기록증 미리보기",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    CircularProgressIndicator()
+                }
+            }
+        }
+    }
+
     if (showPhotoSourceDialog) {
         AlertDialog(
             onDismissRequest = { showPhotoSourceDialog = false },
@@ -382,10 +438,10 @@ fun AddEditRecordScreen(
                     TextButton(
                         onClick = {
                             showPhotoSourceDialog = false
-                            contentPicker.launch("image/*")
+                            contentPicker.launch(Unit)
                         },
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("☁️ 구글포토 / 다른 앱에서 선택") }
+                    ) { Text("🖼️ 기기 갤러리 / 다른 앱 선택") }
                 }
             },
             confirmButton = {},
@@ -465,6 +521,7 @@ private fun ImageStrip(
     imagePaths: List<String>,
     onAdd: () -> Unit,
     onRemove: (String) -> Unit,
+    onPreview: (String) -> Unit,
 ) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
@@ -488,9 +545,12 @@ private fun ImageStrip(
                 if (bitmap != null) {
                     ForegroundImage(
                         bitmap = bitmap,
-                        contentDescription = null,
+                        contentDescription = "미리보기",
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onPreview(path) },
                     )
                 }
                 IconButton(

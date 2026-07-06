@@ -117,6 +117,24 @@ fun RecordDetailScreen(
                     }
                 }
             }
+            if (record.location.isNotBlank() || record.weather.isNotBlank() || record.bodyInfo.isNotBlank()) {
+                Spacer(Modifier.height(12.dp))
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        if (record.location.isNotBlank()) {
+                            Text("📍 ${record.location}", style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(4.dp))
+                        }
+                        if (record.weather.isNotBlank()) {
+                            Text("☀️ ${record.weather}", style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(4.dp))
+                        }
+                        if (record.bodyInfo.isNotBlank()) {
+                            Text("⚖️ ${record.bodyInfo}", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(16.dp))
 
             if (record.imagePaths.isEmpty()) {

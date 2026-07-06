@@ -26,6 +26,9 @@ data class RaceRecord(
     val recordTime: String = "",
     val distance: String = "",
     val ocrText: String = "",
+    val location: String = "",
+    val weather: String = "",
+    val bodyInfo: String = "",
 ) {
     val date: LocalDate get() = LocalDate.ofEpochDay(dateEpochDay)
 

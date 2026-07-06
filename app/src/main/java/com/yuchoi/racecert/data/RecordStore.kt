@@ -92,6 +92,9 @@ object RecordStore {
                         recordTime = obj.optString("recordTime"),
                         distance = obj.optString("distance"),
                         ocrText = obj.optString("ocrText"),
+                        location = obj.optString("location"),
+                        weather = obj.optString("weather"),
+                        bodyInfo = obj.optString("bodyInfo"),
                     )
                 )
             }
@@ -112,6 +115,9 @@ object RecordStore {
             obj.put("recordTime", record.recordTime)
             obj.put("distance", record.distance)
             obj.put("ocrText", record.ocrText)
+            obj.put("location", record.location)
+            obj.put("weather", record.weather)
+            obj.put("bodyInfo", record.bodyInfo)
             array.put(obj)
         }
         runCatching { dataFile.writeText(array.toString()) }

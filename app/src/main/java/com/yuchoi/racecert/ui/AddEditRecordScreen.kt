@@ -52,6 +52,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.PermissionController
+import com.yuchoi.racecert.health.HealthHelper
+import com.yuchoi.racecert.net.WeatherService
 import com.yuchoi.racecert.ocr.CertificateParser
 import com.yuchoi.racecert.ocr.OcrEngine
 import androidx.compose.runtime.Composable
@@ -131,6 +135,11 @@ fun AddEditRecordScreen(
     var recordTime by remember { mutableStateOf(existing?.recordTime ?: "") }
     var distance by remember { mutableStateOf(existing?.distance ?: "") }
     var ocrText by remember { mutableStateOf(existing?.ocrText ?: "") }
+    var location by remember { mutableStateOf(existing?.location ?: "") }
+    var weather by remember { mutableStateOf(existing?.weather ?: "") }
+    var bodyInfo by remember { mutableStateOf(existing?.bodyInfo ?: "") }
+    var weatherLoading by remember { mutableStateOf(false) }
+    var bodyLoading by remember { mutableStateOf(false) }
     val imagePaths: SnapshotStateList<String> =
         remember { existing?.imagePaths.orEmpty().toMutableStateList() }
 
@@ -222,6 +231,71 @@ fun AddEditRecordScreen(
     var showPhotoSourceDialog by remember { mutableStateOf(false) }
     // 탭한 썸네일을 크게 보는 미리보기
     var previewPath by remember { mutableStateOf<String?>(null) }
+
+    // 대회 장소 + 날짜로 당일 날씨 자동 기입 (Open-Meteo, 과거 날짜 지원)
+    fun fetchWeather() {
+        if (location.isBlank()) {
+            Toast.makeText(context, "먼저 대회 장소를 입력해 주세요. (예: 수원)", Toast.LENGTH_SHORT).show()
+            return
+        }
+        scope.launch {
+            weatherLoading = true
+            val result = WeatherService.fetch(location.trim(), date)
+            weatherLoading = false
+            if (result != null) {
+                weather = result
+            } else {
+                Toast.makeText(
+                    context,
+                    "날씨 정보를 찾지 못했어요. 장소 이름이나 날짜(예보는 16일 이내)를 확인해 주세요.",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
+
+    // Health Connect에서 대회일 전후 몸무게/체지방 읽기 (가민 커넥트 동기화 데이터)
+    suspend fun fetchBodyInfo() {
+        bodyLoading = true
+        val result = runCatching { HealthHelper.readBodyInfo(context, date) }.getOrNull()
+        bodyLoading = false
+        if (result != null) {
+            bodyInfo = result
+        } else {
+            Toast.makeText(
+                context,
+                "대회일 전후(±3일) 데이터가 없어요. 가민 커넥트 앱 설정에서 Health Connect 동기화를 켰는지 확인해 주세요.",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+
+    val healthPermissionLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
+    ) { granted ->
+        if (granted.containsAll(HealthHelper.permissions)) {
+            scope.launch { fetchBodyInfo() }
+        } else {
+            Toast.makeText(context, "건강 데이터 읽기 권한이 필요해요.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun onFetchBodyInfoClick() {
+        when (HealthHelper.sdkStatus(context)) {
+            HealthConnectClient.SDK_AVAILABLE -> scope.launch {
+                if (HealthHelper.hasPermissions(context)) {
+                    fetchBodyInfo()
+                } else {
+                    healthPermissionLauncher.launch(HealthHelper.permissions)
+                }
+            }
+            else -> Toast.makeText(
+                context,
+                "이 기기에서 Health Connect(헬스 커넥트)를 사용할 수 없어요. 플레이스토어에서 설치/업데이트해 주세요.",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -353,6 +427,60 @@ fun AddEditRecordScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = location,
+                onValueChange = { location = it },
+                label = { Text("대회 장소 (날씨 조회용, 예: 수원)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { fetchWeather() },
+                enabled = !weatherLoading,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (weatherLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("날씨 조회 중…")
+                } else {
+                    Text("☀️ 대회 당일 날씨 가져오기")
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = weather,
+                onValueChange = { weather = it },
+                label = { Text("대회 당일 날씨") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = { onFetchBodyInfoClick() },
+                enabled = !bodyLoading,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (bodyLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("건강 데이터 읽는 중…")
+                } else {
+                    Text("⌚ 가민 몸무게·체지방 가져오기 (Health Connect)")
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = bodyInfo,
+                onValueChange = { bodyInfo = it },
+                label = { Text("대회 당일 몸 상태 (몸무게/체지방)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
             Spacer(Modifier.height(16.dp))
 
             OutlinedTextField(
@@ -384,6 +512,9 @@ fun AddEditRecordScreen(
                         recordTime = recordTime.trim(),
                         distance = distance.trim(),
                         ocrText = ocrText.trim(),
+                        location = location.trim(),
+                        weather = weather.trim(),
+                        bodyInfo = bodyInfo.trim(),
                     )
                     RecordStore.upsert(record)
                     onDone()

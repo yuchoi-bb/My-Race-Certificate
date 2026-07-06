@@ -78,9 +78,13 @@ private fun computePbs(records: List<RaceRecord>): List<PbEntry> =
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SummaryScreen(bottomBar: @Composable () -> Unit) {
-    val records = RecordStore.records.toList()
+    val all = RecordStore.records.toList()
+    val today = LocalDate.now()
+    // 예정(미래) 대회는 참가 통계에서 제외
+    val records = all.filter { !it.date.isAfter(today) }
+    val upcomingCount = all.size - records.size
     val pbs = remember(records) { computePbs(records) }
-    val thisYear = LocalDate.now().year
+    val thisYear = today.year
     val thisYearCount = records.count { it.date.year == thisYear }
     val typeCounts = records.groupingBy { it.type }.eachCount()
 
@@ -120,10 +124,12 @@ fun SummaryScreen(bottomBar: @Composable () -> Unit) {
                             StatItem("올해 참가", "${thisYearCount}회", Modifier.weight(1f))
                             StatItem("PB 종목", "${pbs.size}개", Modifier.weight(1f))
                         }
-                        if (typeCounts.isNotEmpty()) {
+                        if (typeCounts.isNotEmpty() || upcomingCount > 0) {
                             Spacer(Modifier.height(12.dp))
+                            val parts = typeCounts.entries.map { (t, c) -> "${t.label} ${c}회" } +
+                                if (upcomingCount > 0) listOf("예정 ${upcomingCount}개") else emptyList()
                             Text(
-                                typeCounts.entries.joinToString("  ·  ") { (t, c) -> "${t.label} ${c}회" },
+                                parts.joinToString("  ·  "),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

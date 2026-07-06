@@ -59,4 +59,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // 온디바이스 한국어/라틴 OCR (기록증 텍스트 추출)
+    implementation("com.google.mlkit:text-recognition-korean:16.0.1")
 }

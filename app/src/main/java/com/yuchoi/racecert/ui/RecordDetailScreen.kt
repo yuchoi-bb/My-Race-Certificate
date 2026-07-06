@@ -95,6 +95,28 @@ fun RecordDetailScreen(
                 Spacer(Modifier.width(12.dp))
                 Text(record.date.format(detailFormatter), style = MaterialTheme.typography.bodyLarge)
             }
+
+            if (record.recordTime.isNotBlank() || record.distance.isNotBlank()) {
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (record.distance.isNotBlank()) {
+                        Text(
+                            record.distance,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                    }
+                    if (record.recordTime.isNotBlank()) {
+                        Text(
+                            record.recordTime,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(16.dp))
 
             if (record.imagePaths.isEmpty()) {

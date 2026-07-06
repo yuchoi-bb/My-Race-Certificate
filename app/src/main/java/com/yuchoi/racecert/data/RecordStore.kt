@@ -89,6 +89,9 @@ object RecordStore {
                         imagePaths = images,
                         memo = obj.optString("memo"),
                         createdAt = obj.optLong("createdAt"),
+                        recordTime = obj.optString("recordTime"),
+                        distance = obj.optString("distance"),
+                        ocrText = obj.optString("ocrText"),
                     )
                 )
             }
@@ -106,6 +109,9 @@ object RecordStore {
             obj.put("imagePaths", JSONArray(record.imagePaths))
             obj.put("memo", record.memo)
             obj.put("createdAt", record.createdAt)
+            obj.put("recordTime", record.recordTime)
+            obj.put("distance", record.distance)
+            obj.put("ocrText", record.ocrText)
             array.put(obj)
         }
         runCatching { dataFile.writeText(array.toString()) }

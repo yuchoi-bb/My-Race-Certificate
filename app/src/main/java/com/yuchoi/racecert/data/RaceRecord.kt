@@ -23,6 +23,9 @@ data class RaceRecord(
     val imagePaths: List<String>,
     val memo: String,
     val createdAt: Long,
+    val recordTime: String = "",
+    val distance: String = "",
+    val ocrText: String = "",
 ) {
     val date: LocalDate get() = LocalDate.ofEpochDay(dateEpochDay)
 

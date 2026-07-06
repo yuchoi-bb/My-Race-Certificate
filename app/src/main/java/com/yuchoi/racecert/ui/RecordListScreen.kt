@@ -143,6 +143,15 @@ private fun RecordCard(record: RaceRecord, onClick: () -> Unit) {
                         text = record.date.format(dateFormatter),
                         style = MaterialTheme.typography.bodyMedium,
                     )
+                    if (record.recordTime.isNotBlank()) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = record.recordTime,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
                 if (record.imagePaths.size > 1) {
                     Spacer(Modifier.height(4.dp))

@@ -25,9 +25,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
@@ -44,6 +46,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
+import com.yuchoi.racecert.ocr.CertificateParser
+import com.yuchoi.racecert.ocr.OcrEngine
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -85,11 +89,50 @@ fun AddEditRecordScreen(
     var type by remember { mutableStateOf(existing?.type ?: RaceType.MARATHON) }
     var date by remember { mutableStateOf(existing?.date ?: LocalDate.now()) }
     var memo by remember { mutableStateOf(existing?.memo ?: "") }
+    var recordTime by remember { mutableStateOf(existing?.recordTime ?: "") }
+    var distance by remember { mutableStateOf(existing?.distance ?: "") }
+    var ocrText by remember { mutableStateOf(existing?.ocrText ?: "") }
     val imagePaths: SnapshotStateList<String> =
         remember { existing?.imagePaths.orEmpty().toMutableStateList() }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var typeExpanded by remember { mutableStateOf(false) }
+    var ocrRunning by remember { mutableStateOf(false) }
+    // OCR가 날짜/종목을 함부로 덮어쓰지 않도록, 사용자가 직접 만졌는지 추적
+    var dateManuallySet by remember { mutableStateOf(existing != null) }
+    var typeManuallySet by remember { mutableStateOf(existing != null) }
+
+    // 첨부된 모든 사진을 OCR로 읽어 빈 칸을 초안으로 채운다. 사용자는 이후 자유롭게 수정 가능.
+    suspend fun runOcrOnAllImages() {
+        if (imagePaths.isEmpty()) {
+            Toast.makeText(context, "먼저 기록증 사진을 추가해 주세요.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        ocrRunning = true
+        val combined = StringBuilder()
+        for (path in imagePaths) {
+            val text = OcrEngine.recognize(context, path)
+            if (text.isNotBlank()) {
+                if (combined.isNotEmpty()) combined.append("\n---\n")
+                combined.append(text)
+            }
+        }
+        val parsed = CertificateParser.parse(combined.toString())
+        // 빈 칸만 채우고, 날짜·종목은 사용자가 안 만졌을 때만 반영
+        if (title.isBlank()) parsed.title?.let { title = it }
+        if (recordTime.isBlank()) parsed.recordTime?.let { recordTime = it }
+        if (distance.isBlank()) parsed.distance?.let { distance = it }
+        if (!dateManuallySet) parsed.date?.let { date = it }
+        if (!typeManuallySet) parsed.type?.let { type = it }
+        ocrText = combined.toString()
+        ocrRunning = false
+        Toast.makeText(
+            context,
+            if (combined.isBlank()) "사진에서 글자를 찾지 못했어요. 직접 입력해 주세요."
+            else "사진 ${imagePaths.size}장에서 정보를 읽었어요. 내용을 확인·수정해 주세요.",
+            Toast.LENGTH_LONG,
+        ).show()
+    }
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(RaceRecord.MAX_IMAGES)
@@ -111,6 +154,8 @@ fun AddEditRecordScreen(
                     Toast.LENGTH_SHORT,
                 ).show()
             }
+            // 사진을 추가하면 첨부된 전체 사진을 자동으로 OCR
+            runOcrOnAllImages()
         }
     }
 
@@ -163,6 +208,7 @@ fun AddEditRecordScreen(
                             text = { Text(option.label) },
                             onClick = {
                                 type = option
+                                typeManuallySet = true
                                 typeExpanded = false
                             },
                         )
@@ -208,6 +254,42 @@ fun AddEditRecordScreen(
                 },
                 onRemove = { path -> imagePaths.remove(path) },
             )
+            Spacer(Modifier.height(8.dp))
+
+            // 첨부된 사진 전체를 OCR로 다시 읽기 (사진 추가 시 자동 실행되지만 수동 재실행도 지원)
+            OutlinedButton(
+                onClick = { scope.launch { runOcrOnAllImages() } },
+                enabled = !ocrRunning && imagePaths.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (ocrRunning) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("사진에서 정보 읽는 중…")
+                } else {
+                    Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("사진에서 정보 읽기 (OCR)")
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = recordTime,
+                onValueChange = { recordTime = it },
+                label = { Text("기록 (완주 시간, 예: 00:44:16)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = distance,
+                onValueChange = { distance = it },
+                label = { Text("거리 / 부문 (예: 10Km, 하프, 풀코스)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
             Spacer(Modifier.height(16.dp))
 
             OutlinedTextField(
@@ -215,6 +297,14 @@ fun AddEditRecordScreen(
                 onValueChange = { memo = it },
                 label = { Text("대회 느낀점 / 메모") },
                 modifier = Modifier.fillMaxWidth().height(140.dp),
+            )
+            Spacer(Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = ocrText,
+                onValueChange = { ocrText = it },
+                label = { Text("OCR 인식 원문 (자유롭게 수정 가능)") },
+                modifier = Modifier.fillMaxWidth().height(120.dp),
             )
             Spacer(Modifier.height(24.dp))
 
@@ -228,6 +318,9 @@ fun AddEditRecordScreen(
                         imagePaths = imagePaths.toList(),
                         memo = memo.trim(),
                         createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+                        recordTime = recordTime.trim(),
+                        distance = distance.trim(),
+                        ocrText = ocrText.trim(),
                     )
                     RecordStore.upsert(record)
                     onDone()
@@ -250,6 +343,7 @@ fun AddEditRecordScreen(
                 TextButton(onClick = {
                     state.selectedDateMillis?.let { millis ->
                         date = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
+                        dateManuallySet = true
                     }
                     showDatePicker = false
                 }) { Text("확인") }

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -74,6 +75,14 @@ import java.time.format.DateTimeFormatter
 
 private val formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
 
+/** OCR 완료 후 필수 항목(대회 이름·날짜·기록) 인식 결과 요약 */
+private data class OcrSummary(
+    val imageCount: Int,
+    val textFound: Boolean,
+    val found: List<Pair<String, String>>,
+    val missing: List<String>,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditRecordScreen(
@@ -101,6 +110,8 @@ fun AddEditRecordScreen(
     // OCR가 날짜/종목을 함부로 덮어쓰지 않도록, 사용자가 직접 만졌는지 추적
     var dateManuallySet by remember { mutableStateOf(existing != null) }
     var typeManuallySet by remember { mutableStateOf(existing != null) }
+    // OCR 완료 후 필수 항목(대회 이름·날짜·기록) 인식 결과 안내 다이얼로그
+    var ocrSummary by remember { mutableStateOf<OcrSummary?>(null) }
 
     // 첨부된 모든 사진을 OCR로 읽어 빈 칸을 초안으로 채운다. 사용자는 이후 자유롭게 수정 가능.
     suspend fun runOcrOnAllImages() {
@@ -126,12 +137,23 @@ fun AddEditRecordScreen(
         if (!typeManuallySet) parsed.type?.let { type = it }
         ocrText = combined.toString()
         ocrRunning = false
-        Toast.makeText(
-            context,
-            if (combined.isBlank()) "사진에서 글자를 찾지 못했어요. 직접 입력해 주세요."
-            else "사진 ${imagePaths.size}장에서 정보를 읽었어요. 내용을 확인·수정해 주세요.",
-            Toast.LENGTH_LONG,
-        ).show()
+
+        // 필수 항목 인식 결과 정리: 채워진 값은 보여주고, 비어 있으면 직접 입력 안내
+        val found = mutableListOf<Pair<String, String>>()
+        val missing = mutableListOf<String>()
+        if (title.isNotBlank()) found.add("대회 이름" to title) else missing.add("대회 이름")
+        if (dateManuallySet || parsed.date != null) {
+            found.add("대회 날짜" to date.format(formatter))
+        } else {
+            missing.add("대회 날짜")
+        }
+        if (recordTime.isNotBlank()) found.add("기록" to recordTime) else missing.add("기록")
+        ocrSummary = OcrSummary(
+            imageCount = imagePaths.size,
+            textFound = combined.isNotBlank(),
+            found = found,
+            missing = missing,
+        )
     }
 
     val picker = rememberLauncherForActivityResult(
@@ -181,7 +203,7 @@ fun AddEditRecordScreen(
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
-                label = { Text("대회 이름") },
+                label = { Text("대회 이름 (필수)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -223,7 +245,7 @@ fun AddEditRecordScreen(
             ) {
                 Icon(Icons.Filled.CalendarMonth, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("대회 날짜: ${date.format(formatter)}")
+                Text("대회 날짜 (필수): ${date.format(formatter)}")
             }
             Spacer(Modifier.height(16.dp))
 
@@ -277,7 +299,7 @@ fun AddEditRecordScreen(
             OutlinedTextField(
                 value = recordTime,
                 onValueChange = { recordTime = it },
-                label = { Text("기록 (완주 시간, 예: 00:44:16)") },
+                label = { Text("기록 (필수 · 완주 시간, 예: 00:44:16)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -331,6 +353,47 @@ fun AddEditRecordScreen(
                 Text("저장")
             }
         }
+    }
+
+    ocrSummary?.let { summary ->
+        AlertDialog(
+            onDismissRequest = { ocrSummary = null },
+            title = {
+                Text(
+                    if (summary.textFound) "사진 ${summary.imageCount}장에서 정보를 읽었어요"
+                    else "사진에서 글자를 찾지 못했어요",
+                )
+            },
+            text = {
+                Column {
+                    summary.found.forEach { (label, value) ->
+                        Text("✅ $label: $value")
+                        Spacer(Modifier.height(4.dp))
+                    }
+                    if (summary.missing.isNotEmpty()) {
+                        if (summary.found.isNotEmpty()) Spacer(Modifier.height(8.dp))
+                        Text(
+                            "⚠️ 인식하지 못한 필수 항목",
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        summary.missing.forEach { label ->
+                            Text(
+                                "• $label — 직접 입력해 주세요",
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                        }
+                    } else if (summary.textFound) {
+                        Spacer(Modifier.height(8.dp))
+                        Text("필수 항목이 모두 채워졌어요. 내용을 확인하고 저장해 주세요.")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { ocrSummary = null }) { Text("확인") }
+            },
+        )
     }
 
     if (showDatePicker) {

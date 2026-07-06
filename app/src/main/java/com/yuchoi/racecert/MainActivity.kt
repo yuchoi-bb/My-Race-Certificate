@@ -5,9 +5,15 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -21,6 +27,7 @@ import com.yuchoi.racecert.data.RecordStore
 import com.yuchoi.racecert.ui.AddEditRecordScreen
 import com.yuchoi.racecert.ui.RecordDetailScreen
 import com.yuchoi.racecert.ui.RecordListScreen
+import com.yuchoi.racecert.ui.SummaryScreen
 import com.yuchoi.racecert.update.UpdateChecker
 import com.yuchoi.racecert.update.UpdateInfo
 import com.yuchoi.racecert.update.UpdateInstaller
@@ -87,12 +94,39 @@ private fun App(onStartUpdate: (UpdateInfo) -> Unit) {
 
     LaunchedEffect(Unit) { checkForUpdate(manual = false) }
 
+    // 홈 하단 탭: 0 = 기록 목록, 1 = 요약·PB
+    var homeTab by remember { mutableStateOf(0) }
+
     when (val current = screen) {
-        is Screen.List -> RecordListScreen(
-            onAddRecord = { screen = Screen.AddEdit(null) },
-            onOpenRecord = { screen = Screen.Detail(it) },
-            onCheckUpdate = { scope.launch { checkForUpdate(manual = true) } },
-        )
+        is Screen.List -> {
+            val bottomBar: @Composable () -> Unit = {
+                NavigationBar {
+                    NavigationBarItem(
+                        selected = homeTab == 0,
+                        onClick = { homeTab = 0 },
+                        icon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) },
+                        label = { Text("기록") },
+                    )
+                    NavigationBarItem(
+                        selected = homeTab == 1,
+                        onClick = { homeTab = 1 },
+                        icon = { Icon(Icons.Filled.BarChart, contentDescription = null) },
+                        label = { Text("요약 · PB") },
+                    )
+                }
+            }
+            if (homeTab == 0) {
+                RecordListScreen(
+                    onAddRecord = { screen = Screen.AddEdit(null) },
+                    onOpenRecord = { screen = Screen.Detail(it) },
+                    onCheckUpdate = { scope.launch { checkForUpdate(manual = true) } },
+                    bottomBar = bottomBar,
+                )
+            } else {
+                BackHandler { homeTab = 0 }
+                SummaryScreen(bottomBar = bottomBar)
+            }
+        }
 
         is Screen.Detail -> {
             BackHandler { screen = Screen.List }

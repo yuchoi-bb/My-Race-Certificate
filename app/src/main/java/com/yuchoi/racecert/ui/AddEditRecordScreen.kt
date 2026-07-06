@@ -1,5 +1,6 @@
 package com.yuchoi.racecert.ui
 
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -156,14 +157,13 @@ fun AddEditRecordScreen(
         )
     }
 
-    val picker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(RaceRecord.MAX_IMAGES)
-    ) { uris ->
-        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+    // 포토 피커/다른 앱 어느 쪽에서 골라도 동일하게 처리: 복사 → 10장 제한 → 전체 OCR
+    fun handlePickedUris(uris: List<Uri>) {
+        if (uris.isEmpty()) return
         val remaining = RaceRecord.MAX_IMAGES - imagePaths.size
         if (remaining <= 0) {
             Toast.makeText(context, "이미지는 최대 ${RaceRecord.MAX_IMAGES}장까지예요.", Toast.LENGTH_SHORT).show()
-            return@rememberLauncherForActivityResult
+            return
         }
         val toImport = uris.take(remaining)
         scope.launch {
@@ -180,6 +180,17 @@ fun AddEditRecordScreen(
             runOcrOnAllImages()
         }
     }
+
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(RaceRecord.MAX_IMAGES)
+    ) { uris -> handlePickedUris(uris) }
+
+    // 구글포토 앱 등 다른 갤러리 앱에서 직접 선택 (다중 선택 지원)
+    val contentPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris -> handlePickedUris(uris) }
+
+    var showPhotoSourceDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -269,9 +280,7 @@ fun AddEditRecordScreen(
                             Toast.LENGTH_SHORT,
                         ).show()
                     } else {
-                        picker.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
+                        showPhotoSourceDialog = true
                     }
                 },
                 onRemove = { path -> imagePaths.remove(path) },
@@ -353,6 +362,37 @@ fun AddEditRecordScreen(
                 Text("저장")
             }
         }
+    }
+
+    if (showPhotoSourceDialog) {
+        AlertDialog(
+            onDismissRequest = { showPhotoSourceDialog = false },
+            title = { Text("사진 가져오기") },
+            text = {
+                Column {
+                    TextButton(
+                        onClick = {
+                            showPhotoSourceDialog = false
+                            picker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("📱 갤러리에서 선택 (포토 피커)") }
+                    TextButton(
+                        onClick = {
+                            showPhotoSourceDialog = false
+                            contentPicker.launch("image/*")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("☁️ 구글포토 / 다른 앱에서 선택") }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showPhotoSourceDialog = false }) { Text("취소") }
+            },
+        )
     }
 
     ocrSummary?.let { summary ->

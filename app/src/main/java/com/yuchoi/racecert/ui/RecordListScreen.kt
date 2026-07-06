@@ -61,6 +61,7 @@ fun RecordListScreen(
     onAddRecord: () -> Unit,
     onOpenRecord: (String) -> Unit,
     onCheckUpdate: () -> Unit,
+    bottomBar: @Composable () -> Unit = {},
 ) {
     // true = 최신순(내림차순), false = 오래된순(오름차순)
     var newestFirst by remember { mutableStateOf(true) }
@@ -89,9 +90,16 @@ fun RecordListScreen(
                     androidx.compose.material3.IconButton(onClick = onCheckUpdate) {
                         Icon(Icons.Filled.SystemUpdate, contentDescription = "업데이트 확인")
                     }
+                    Text(
+                        text = "v${com.yuchoi.racecert.BuildConfig.VERSION_NAME}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(end = 12.dp),
+                    )
                 },
             )
         },
+        bottomBar = bottomBar,
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onAddRecord,

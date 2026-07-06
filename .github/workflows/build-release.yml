@@ -1,0 +1,46 @@
+name: Build & Release APK
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build signed release APK
+        run: ./gradlew assembleRelease -PbuildNumber=${{ github.run_number }}
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk my-race-certificate-v1.0.${{ github.run_number }}.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: 나의 대회 기록증 v1.0.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            자동 빌드된 APK입니다.
+
+            - 처음 설치: 아래 APK 파일을 폰에서 눌러 다운로드 후 설치하세요.
+            - 이미 설치되어 있다면: 앱을 실행하면 업데이트 안내가 자동으로 뜹니다.
+          files: my-race-certificate-v1.0.${{ github.run_number }}.apk

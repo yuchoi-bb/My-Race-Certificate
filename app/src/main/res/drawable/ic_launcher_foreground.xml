@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 메달 리본 -->
+    <path
+        android:fillColor="#FFC107"
+        android:pathData="M45,26 L54,44 L63,26 L58,26 L54,34 L50,26 Z" />
+    <!-- 메달 원 -->
+    <path
+        android:fillColor="#FFD54F"
+        android:pathData="M54,42 m-16,0 a16,16 0 1,0 32,0 a16,16 0 1,0 -32,0" />
+    <path
+        android:fillColor="#FFA000"
+        android:pathData="M54,42 m-12,0 a12,12 0 1,0 24,0 a12,12 0 1,0 -24,0" />
+    <!-- 별 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,34 L56.4,39.2 L62,39.8 L57.8,43.6 L59,49.2 L54,46.4 L49,49.2 L50.2,43.6 L46,39.8 L51.6,39.2 Z" />
+    <!-- 기록증 라인 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,64 h28 v3 h-28 Z M40,71 h28 v3 h-28 Z M40,78 h18 v3 h-18 Z" />
+</vector>

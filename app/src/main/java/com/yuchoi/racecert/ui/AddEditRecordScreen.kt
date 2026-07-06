@@ -270,13 +270,27 @@ fun AddEditRecordScreen(
         }
     }
 
+    fun openHealthConnectSettings() {
+        val opened = runCatching {
+            context.startActivity(Intent(HealthConnectClient.ACTION_HEALTH_CONNECT_SETTINGS))
+        }.isSuccess
+        if (!opened) {
+            Toast.makeText(context, "Health Connect 설정을 열 수 없어요.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val healthPermissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract()
     ) { granted ->
         if (granted.containsAll(HealthHelper.permissions)) {
             scope.launch { fetchBodyInfo() }
         } else {
-            Toast.makeText(context, "건강 데이터 읽기 권한이 필요해요.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                "몸무게·체지방 읽기를 허용해 주세요. Health Connect 설정을 엽니다.",
+                Toast.LENGTH_LONG,
+            ).show()
+            openHealthConnectSettings()
         }
     }
 
@@ -286,7 +300,15 @@ fun AddEditRecordScreen(
                 if (HealthHelper.hasPermissions(context)) {
                     fetchBodyInfo()
                 } else {
-                    healthPermissionLauncher.launch(HealthHelper.permissions)
+                    runCatching { healthPermissionLauncher.launch(HealthHelper.permissions) }
+                        .onFailure {
+                            Toast.makeText(
+                                context,
+                                "권한 화면을 열 수 없어요. Health Connect 설정에서 직접 허용해 주세요.",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                            openHealthConnectSettings()
+                        }
                 }
             }
             else -> Toast.makeText(

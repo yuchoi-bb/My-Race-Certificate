@@ -61,4 +61,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     // 온디바이스 한국어/라틴 OCR (기록증 텍스트 추출)
     implementation("com.google.mlkit:text-recognition-korean:16.0.1")
+    // Google 로그인 (Drive 자동 동기화용 계정/토큰)
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
 }

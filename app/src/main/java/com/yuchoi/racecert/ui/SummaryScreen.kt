@@ -25,23 +25,36 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yuchoi.racecert.BuildConfig
+import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
 import com.yuchoi.racecert.data.BackupManager
 import com.yuchoi.racecert.data.RaceRecord
 import com.yuchoi.racecert.data.RaceType
 import com.yuchoi.racecert.data.RecordStore
+import com.yuchoi.racecert.sync.DriveSync
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 private val pbDateFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
+
+private fun syncMessage(r: DriveSync.SyncResult): String = when (r) {
+    DriveSync.SyncResult.UPLOADED -> "이 폰의 기록을 Drive에 올렸어요."
+    DriveSync.SyncResult.DOWNLOADED -> "Drive의 최신 기록을 받아왔어요."
+    DriveSync.SyncResult.IN_SYNC -> "이미 최신 상태예요."
+    DriveSync.SyncResult.NOT_SIGNED_IN -> "로그인이 필요해요."
+    DriveSync.SyncResult.ERROR -> "동기화 실패 (네트워크/권한/OAuth 설정 확인)."
+}
 
 /** 종목+거리 그룹의 최고 기록(PB) 한 건 */
 private data class PbEntry(
@@ -89,6 +102,25 @@ private fun computePbs(records: List<RaceRecord>): List<PbEntry> =
 fun SummaryScreen(bottomBar: @Composable () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // Google Drive 자동 동기화 상태
+    var syncEmail by remember { mutableStateOf(DriveSync.accountEmail(context)) }
+    var syncStatus by remember { mutableStateOf("") }
+    val signInLauncher = rememberLauncherForActivityResult(StartActivityForResult()) { result ->
+        val account = DriveSync.accountFromIntent(result.data)
+        if (account != null) {
+            syncEmail = account.email
+            syncStatus = "동기화 중…"
+            DriveSync.requestSync(context) { r -> syncStatus = syncMessage(r) }
+        } else {
+            syncStatus = "로그인에 실패했어요. (OAuth 설정/네트워크 확인)"
+        }
+    }
+
+    fun syncNow() {
+        syncStatus = "동기화 중…"
+        DriveSync.requestSync(context) { r -> syncStatus = syncMessage(r) }
+    }
 
     // 백업 저장 (SAF → Google Drive 등)
     val exportLauncher = rememberLauncherForActivityResult(
@@ -228,10 +260,57 @@ fun SummaryScreen(bottomBar: @Composable () -> Unit) {
                 }
             }
 
+            item(key = "autosync") {
+                Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("자동 동기화 (Google Drive)", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Google 계정으로 로그인하면 같은 계정을 쓰는 다른 폰과 기록이 자동으로 동기화돼요.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        val email = syncEmail
+                        if (email == null) {
+                            Button(
+                                onClick = { signInLauncher.launch(DriveSync.client(context).signInIntent) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("🔗 Google로 로그인하여 동기화") }
+                        } else {
+                            Text("로그인: $email", style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(8.dp))
+                            Button(
+                                onClick = { syncNow() },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("🔄 지금 동기화") }
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    DriveSync.signOut(context) {
+                                        syncEmail = null
+                                        syncStatus = ""
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("로그아웃") }
+                        }
+                        if (syncStatus.isNotBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                syncStatus,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+
             item(key = "backup") {
                 Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("백업 / 복원", style = MaterialTheme.typography.titleMedium)
+                        Text("수동 백업 / 복원", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(4.dp))
                         Text(
                             "기록·사진을 하나의 파일로 저장해 Google Drive에 올리고, 다른 폰에서 그 파일을 불러와 복원할 수 있어요.",

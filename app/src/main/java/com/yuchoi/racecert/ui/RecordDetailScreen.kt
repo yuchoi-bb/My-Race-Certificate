@@ -54,6 +54,7 @@ fun RecordDetailScreen(
     onEdit: () -> Unit,
     onDeleted: () -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val record = remember(recordId, RecordStore.records.toList()) { RecordStore.find(recordId) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
@@ -192,6 +193,7 @@ fun RecordDetailScreen(
             confirmButton = {
                 TextButton(onClick = {
                     RecordStore.delete(record.id)
+                    com.yuchoi.racecert.sync.DriveSync.requestSync(context)
                     showDeleteConfirm = false
                     onDeleted()
                 }) { Text("삭제") }

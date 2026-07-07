@@ -597,6 +597,7 @@ fun AddEditRecordScreen(
                         bodyDateEpochDay = if (bodyInfo.isBlank()) 0 else (bodyDate?.toEpochDay() ?: 0),
                     )
                     RecordStore.upsert(record)
+                    com.yuchoi.racecert.sync.DriveSync.requestSync(context)
                     onDone()
                 },
                 enabled = title.isNotBlank(),

@@ -27,6 +27,15 @@ object RecordStore {
     private val dataFile: File get() = File(appContext.filesDir, "records.json")
     private val imagesDir: File
         get() = File(appContext.filesDir, "images").apply { if (!exists()) mkdirs() }
+    private val syncMetaFile: File get() = File(appContext.filesDir, "sync_local.txt")
+
+    /** 로컬 데이터가 마지막으로 바뀐 시각(epoch millis). Drive 동기화 비교에 사용. */
+    fun localUpdatedAt(): Long = runCatching { syncMetaFile.readText().trim().toLong() }.getOrDefault(0L)
+
+    /** 원격에서 복원한 직후 등, 로컬 기준 시각을 명시적으로 맞춘다. */
+    fun setLocalUpdatedAt(millis: Long) {
+        runCatching { syncMetaFile.writeText(millis.toString()) }
+    }
 
     fun init(context: Context) {
         if (::appContext.isInitialized) return
@@ -150,5 +159,7 @@ object RecordStore {
             array.put(obj)
         }
         runCatching { dataFile.writeText(array.toString()) }
+        // 로컬 변경 시각 갱신 (동기화 비교용)
+        runCatching { syncMetaFile.writeText(System.currentTimeMillis().toString()) }
     }
 }

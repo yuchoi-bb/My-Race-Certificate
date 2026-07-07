@@ -40,7 +40,7 @@ private sealed interface Screen {
     data object List : Screen
     data class Detail(val recordId: String) : Screen
     data class AddEdit(val recordId: String?) : Screen
-    data class ShareImport(val uris: List<Uri>) : Screen
+    data class ShareImport(val uris: kotlin.collections.List<Uri>) : Screen
 }
 
 class MainActivity : ComponentActivity() {

@@ -240,12 +240,21 @@ fun AddEditRecordScreen(
             weatherLoading = true
             val result = WeatherService.fetch(location.trim(), date)
             weatherLoading = false
-            if (result != null) {
-                weather = result
-            } else {
-                Toast.makeText(
+            when (result) {
+                is WeatherService.Result.Success -> weather = result.text
+                WeatherService.Result.PlaceNotFound -> Toast.makeText(
                     context,
-                    "날씨 정보를 찾지 못했어요. 장소 이름이나 날짜(예보는 16일 이내)를 확인해 주세요.",
+                    "장소 '${location.trim()}'를 찾지 못했어요. 도시/지역명으로 입력해 주세요. (예: 수원, 서울, 울릉)",
+                    Toast.LENGTH_LONG,
+                ).show()
+                WeatherService.Result.NoWeatherData -> Toast.makeText(
+                    context,
+                    "그 날짜의 날씨 데이터가 없어요. 미래 대회는 16일 이내 예보만 가능해요.",
+                    Toast.LENGTH_LONG,
+                ).show()
+                WeatherService.Result.NetworkError -> Toast.makeText(
+                    context,
+                    "네트워크 오류로 날씨를 못 가져왔어요. 인터넷 연결을 확인하고 다시 시도해 주세요.",
                     Toast.LENGTH_LONG,
                 ).show()
             }

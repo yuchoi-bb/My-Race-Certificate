@@ -343,6 +343,42 @@ fun AddEditRecordScreen(
                 Spacer(Modifier.width(8.dp))
                 Text("대회 날짜 (필수): ${date.format(formatter)}")
             }
+
+            // 미래 날짜면 '예정된 대회'로 안내 + D-day 표시
+            val daysLeft = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), date)
+            if (daysLeft > 0) {
+                Spacer(Modifier.height(8.dp))
+                androidx.compose.material3.Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.compose.material3.CardDefaults.cardColors(
+                        containerColor = androidx.compose.ui.graphics.Color(0xFFFFECB3),
+                    ),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "🗓️ 예정된 대회로 등록돼요",
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            Text(
+                                "기록·사진은 대회를 마친 뒤 이 기록을 열어 추가하면 됩니다.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            "D-$daysLeft",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            color = androidx.compose.ui.graphics.Color(0xFFE65100),
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(16.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -394,7 +430,7 @@ fun AddEditRecordScreen(
             OutlinedTextField(
                 value = recordTime,
                 onValueChange = { recordTime = it },
-                label = { Text("기록 (필수 · 완주 시간, 예: 00:44:16)") },
+                label = { Text("기록 (완주 시간, 예: 00:44:16 · 예정 대회는 비워두세요)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -507,7 +543,7 @@ fun AddEditRecordScreen(
                 enabled = title.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("저장")
+                Text(if (date.isAfter(LocalDate.now())) "예정 대회 저장" else "저장")
             }
         }
     }

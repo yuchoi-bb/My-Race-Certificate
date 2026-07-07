@@ -1,5 +1,7 @@
 package com.yuchoi.racecert
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -27,6 +29,7 @@ import com.yuchoi.racecert.data.RecordStore
 import com.yuchoi.racecert.ui.AddEditRecordScreen
 import com.yuchoi.racecert.ui.RecordDetailScreen
 import com.yuchoi.racecert.ui.RecordListScreen
+import com.yuchoi.racecert.ui.ShareImportScreen
 import com.yuchoi.racecert.ui.SummaryScreen
 import com.yuchoi.racecert.update.UpdateChecker
 import com.yuchoi.racecert.update.UpdateInfo
@@ -37,6 +40,7 @@ private sealed interface Screen {
     data object List : Screen
     data class Detail(val recordId: String) : Screen
     data class AddEdit(val recordId: String?) : Screen
+    data class ShareImport(val uris: List<Uri>) : Screen
 }
 
 class MainActivity : ComponentActivity() {
@@ -51,9 +55,12 @@ class MainActivity : ComponentActivity() {
         updateInstaller = UpdateInstaller(this)
         updateInstaller.register()
 
+        val sharedImages = extractSharedImages(intent)
+
         setContent {
             MaterialTheme {
                 App(
+                    initialSharedImages = sharedImages,
                     onStartUpdate = { info ->
                         updateInstaller.startDownload(info)
                         Toast.makeText(
@@ -71,11 +78,35 @@ class MainActivity : ComponentActivity() {
         updateInstaller.unregister()
         super.onDestroy()
     }
+
+    @Suppress("DEPRECATION")
+    private fun extractSharedImages(intent: Intent?): List<Uri> = when (intent?.action) {
+        Intent.ACTION_SEND -> {
+            val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+            if (uri != null && intent.type?.startsWith("image/") == true) listOf(uri) else emptyList()
+        }
+        Intent.ACTION_SEND_MULTIPLE -> {
+            if (intent.type?.startsWith("image/") == true) {
+                intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty().filterNotNull()
+            } else {
+                emptyList()
+            }
+        }
+        else -> emptyList()
+    }
 }
 
 @Composable
-private fun App(onStartUpdate: (UpdateInfo) -> Unit) {
-    var screen by remember { mutableStateOf<Screen>(Screen.List) }
+private fun App(
+    onStartUpdate: (UpdateInfo) -> Unit,
+    initialSharedImages: List<Uri> = emptyList(),
+) {
+    var screen by remember {
+        mutableStateOf<Screen>(
+            if (initialSharedImages.isNotEmpty()) Screen.ShareImport(initialSharedImages)
+            else Screen.List,
+        )
+    }
 
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
     var showUpdateDialog by remember { mutableStateOf(false) }
@@ -147,6 +178,16 @@ private fun App(onStartUpdate: (UpdateInfo) -> Unit) {
                 recordId = current.recordId,
                 onDone = back,
                 onCancel = back,
+            )
+        }
+
+        is Screen.ShareImport -> {
+            BackHandler { screen = Screen.List }
+            ShareImportScreen(
+                sharedUris = current.uris,
+                onDone = { screen = Screen.List },
+                onOpenRecord = { screen = Screen.Detail(it) },
+                onOpenEdit = { screen = Screen.AddEdit(it) },
             )
         }
     }

@@ -142,7 +142,7 @@ private fun App(onStartUpdate: (UpdateInfo) -> Unit) {
 
         is Screen.AddEdit -> {
             val back = { screen = Screen.List }
-            BackHandler { back() }
+            // 뒤로가기(시스템/상단)는 AddEditRecordScreen 내부에서 미저장 확인 후 처리
             AddEditRecordScreen(
                 recordId = current.recordId,
                 onDone = back,

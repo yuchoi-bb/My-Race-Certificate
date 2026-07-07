@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContract
@@ -324,12 +325,64 @@ fun AddEditRecordScreen(
         }
     }
 
+    var showDiscardDialog by remember { mutableStateOf(false) }
+
+    fun doSave() {
+        val record = RaceRecord(
+            id = existing?.id ?: RecordStore.newId(),
+            title = title.trim(),
+            type = type,
+            dateEpochDay = date.toEpochDay(),
+            imagePaths = imagePaths.toList(),
+            memo = memo.trim(),
+            createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+            recordTime = recordTime.trim(),
+            distance = distance.trim(),
+            ocrText = ocrText.trim(),
+            location = location.trim(),
+            weather = weather.trim(),
+            bodyInfo = bodyInfo.trim(),
+            bodyDateEpochDay = if (bodyInfo.isBlank()) 0 else (bodyDate?.toEpochDay() ?: 0),
+            entryFee = entryFee.trim(),
+            eventFee = eventFee.trim(),
+            eventNote = eventNote.trim(),
+            bib = bib.trim(),
+        )
+        RecordStore.upsert(record)
+        com.yuchoi.racecert.sync.DriveSync.requestSync(context)
+        onDone()
+    }
+
+    // 저장하지 않은 변경사항이 있는지
+    val dirty = if (existing == null) {
+        title.isNotBlank() || recordTime.isNotBlank() || distance.isNotBlank() ||
+            bib.isNotBlank() || entryFee.isNotBlank() || eventFee.isNotBlank() ||
+            eventNote.isNotBlank() || location.isNotBlank() || weather.isNotBlank() ||
+            bodyInfo.isNotBlank() || memo.isNotBlank() || ocrText.isNotBlank() ||
+            imagePaths.isNotEmpty() || dateManuallySet || typeManuallySet
+    } else {
+        title.trim() != existing.title || recordTime.trim() != existing.recordTime ||
+            distance.trim() != existing.distance || bib.trim() != existing.bib ||
+            entryFee.trim() != existing.entryFee || eventFee.trim() != existing.eventFee ||
+            eventNote.trim() != existing.eventNote || location.trim() != existing.location ||
+            weather.trim() != existing.weather || bodyInfo.trim() != existing.bodyInfo ||
+            memo.trim() != existing.memo || ocrText.trim() != existing.ocrText ||
+            imagePaths.toList() != existing.imagePaths || type != existing.type ||
+            date != existing.date || bodyDate != existing.bodyDate
+    }
+
+    fun attemptBack() {
+        if (dirty) showDiscardDialog = true else onCancel()
+    }
+
+    BackHandler(enabled = true) { attemptBack() }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(if (existing == null) "기록 추가" else "기록 수정") },
                 navigationIcon = {
-                    IconButton(onClick = onCancel) {
+                    IconButton(onClick = { attemptBack() }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "뒤로")
                     }
                 },
@@ -634,31 +687,7 @@ fun AddEditRecordScreen(
             Spacer(Modifier.height(24.dp))
 
             Button(
-                onClick = {
-                    val record = RaceRecord(
-                        id = existing?.id ?: RecordStore.newId(),
-                        title = title.trim(),
-                        type = type,
-                        dateEpochDay = date.toEpochDay(),
-                        imagePaths = imagePaths.toList(),
-                        memo = memo.trim(),
-                        createdAt = existing?.createdAt ?: System.currentTimeMillis(),
-                        recordTime = recordTime.trim(),
-                        distance = distance.trim(),
-                        ocrText = ocrText.trim(),
-                        location = location.trim(),
-                        weather = weather.trim(),
-                        bodyInfo = bodyInfo.trim(),
-                        bodyDateEpochDay = if (bodyInfo.isBlank()) 0 else (bodyDate?.toEpochDay() ?: 0),
-                        entryFee = entryFee.trim(),
-                        eventFee = eventFee.trim(),
-                        eventNote = eventNote.trim(),
-                        bib = bib.trim(),
-                    )
-                    RecordStore.upsert(record)
-                    com.yuchoi.racecert.sync.DriveSync.requestSync(context)
-                    onDone()
-                },
+                onClick = { doSave() },
                 enabled = title.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -760,6 +789,38 @@ fun AddEditRecordScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { placeCandidates = emptyList() }) { Text("취소") }
+            },
+        )
+    }
+
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = { Text("저장하지 않고 나갈까요?") },
+            text = { Text("입력한 내용이 저장되지 않았어요.") },
+            confirmButton = {
+                if (title.isNotBlank()) {
+                    TextButton(onClick = {
+                        showDiscardDialog = false
+                        doSave()
+                    }) { Text("저장하고 나가기") }
+                } else {
+                    TextButton(onClick = {
+                        showDiscardDialog = false
+                        onCancel()
+                    }) { Text("나가기") }
+                }
+            },
+            dismissButton = {
+                Row {
+                    if (title.isNotBlank()) {
+                        TextButton(onClick = {
+                            showDiscardDialog = false
+                            onCancel()
+                        }) { Text("저장 안 함") }
+                    }
+                    TextButton(onClick = { showDiscardDialog = false }) { Text("취소") }
+                }
             },
         )
     }

@@ -15,6 +15,13 @@ object CertificateParser {
         val recordTime: String? = null,
         val distance: String? = null,
         val type: RaceType? = null,
+        val bib: String? = null,
+    )
+
+    // 배번호: "bib : 11000", "Bib Number 23012", "배번호 788", "배번 10043"
+    private val bibRegex = Regex(
+        """(?:bib(?:\s*number)?|배\s*번\s*호?)\s*[:：]?\s*(\d{2,6})""",
+        RegexOption.IGNORE_CASE,
     )
 
     // 완주 시간 후보. 디지털 폰트에서 0→O, 1→I 로 오인식되는 경우까지 허용해서 잡는다.
@@ -48,6 +55,7 @@ object CertificateParser {
             recordTime = findRecordTime(text),
             distance = findDistance(text),
             type = findType(text),
+            bib = bibRegex.find(text)?.groupValues?.get(1),
         )
     }
 

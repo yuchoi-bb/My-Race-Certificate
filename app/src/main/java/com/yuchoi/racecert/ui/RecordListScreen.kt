@@ -294,7 +294,22 @@ private fun RecordCard(record: RaceRecord, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = cardColor(record)),
     ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            // 기록증 사진을 카드 배경으로 흐릿하게 깔기
+            val bgPath = record.imagePaths.firstOrNull()
+            if (bgPath != null) {
+                val bg = rememberSampledBitmap(bgPath, reqSizePx = 512)
+                if (bg != null) {
+                    ForegroundImage(
+                        bitmap = bg,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alpha = 0.13f,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                }
+            }
+            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Thumbnail(path = record.imagePaths.firstOrNull())
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -331,21 +346,29 @@ private fun RecordCard(record: RaceRecord, onClick: () -> Unit) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    if (record.imagePaths.size > 1) {
+                    if (record.bib.isNotBlank()) {
                         if (record.distance.isNotBlank()) {
                             Text(
-                                text = "  ·  ",
+                                "  ·  ",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         Text(
-                            text = "사진 ${record.imagePaths.size}장",
+                            "배번 ${record.bib}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (record.imagePaths.size > 1) {
+                        Text(
+                            "  ·  사진 ${record.imagePaths.size}장",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
+            }
             }
         }
     }

@@ -132,6 +132,7 @@ fun AddEditRecordScreen(
     var memo by remember { mutableStateOf(existing?.memo ?: "") }
     var recordTime by remember { mutableStateOf(existing?.recordTime ?: "") }
     var distance by remember { mutableStateOf(existing?.distance ?: "") }
+    var bib by remember { mutableStateOf(existing?.bib ?: "") }
     var entryFee by remember { mutableStateOf(existing?.entryFee ?: "") }
     var eventFee by remember { mutableStateOf(existing?.eventFee ?: "") }
     var eventNote by remember { mutableStateOf(existing?.eventNote ?: "") }
@@ -183,6 +184,7 @@ fun AddEditRecordScreen(
         if (title.isBlank()) parsed.title?.let { title = it }
         if (recordTime.isBlank()) parsed.recordTime?.let { recordTime = it }
         if (distance.isBlank()) parsed.distance?.let { distance = it }
+        if (bib.isBlank()) parsed.bib?.let { bib = it }
         if (!dateManuallySet) parsed.date?.let { date = it }
         if (!typeManuallySet) parsed.type?.let { type = it }
         ocrText = combined.toString()
@@ -198,6 +200,7 @@ fun AddEditRecordScreen(
             missing.add("대회 날짜")
         }
         if (recordTime.isNotBlank()) found.add("기록" to recordTime) else missing.add("기록")
+        if (bib.isNotBlank()) found.add("배번" to bib)
         ocrSummary = OcrSummary(
             imageCount = imagePaths.size,
             textFound = combined.isNotBlank(),
@@ -508,6 +511,15 @@ fun AddEditRecordScreen(
             Spacer(Modifier.height(12.dp))
 
             OutlinedTextField(
+                value = bib,
+                onValueChange = { bib = it },
+                label = { Text("배번호 (사진에서 자동 인식, 예: 11000)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
                 value = entryFee,
                 onValueChange = { entryFee = it },
                 label = { Text("기본 참가비 (실제 금액, 예: 40,000원)") },
@@ -641,6 +653,7 @@ fun AddEditRecordScreen(
                         entryFee = entryFee.trim(),
                         eventFee = eventFee.trim(),
                         eventNote = eventNote.trim(),
+                        bib = bib.trim(),
                     )
                     RecordStore.upsert(record)
                     com.yuchoi.racecert.sync.DriveSync.requestSync(context)

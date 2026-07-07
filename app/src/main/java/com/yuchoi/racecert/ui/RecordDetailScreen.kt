@@ -1,8 +1,11 @@
 package com.yuchoi.racecert.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -120,11 +123,15 @@ fun RecordDetailScreen(
             }
             if (record.location.isNotBlank() || record.weather.isNotBlank() ||
                 record.bodyInfo.isNotBlank() || record.entryFee.isNotBlank() ||
-                record.eventFee.isNotBlank()
+                record.eventFee.isNotBlank() || record.bib.isNotBlank()
             ) {
                 Spacer(Modifier.height(12.dp))
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        if (record.bib.isNotBlank()) {
+                            Text("🎽 배번 ${record.bib}", style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(4.dp))
+                        }
                         if (record.totalFeeAmount > 0) {
                             val total = "%,d".format(record.totalFeeAmount)
                             if (record.eventFeeAmount > 0) {
@@ -167,28 +174,64 @@ fun RecordDetailScreen(
             if (record.imagePaths.isEmpty()) {
                 Text("등록된 기록증 사진이 없어요.", style = MaterialTheme.typography.bodyMedium)
             } else {
-                record.imagePaths.forEach { path ->
-                    val bitmap = rememberSampledBitmap(path, reqSizePx = 1440)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center,
+                // 메인 이미지(선택) + 아래 썸네일. 썸네일을 탭하면 메인이 교체된다.
+                var selected by remember(record.id) { mutableStateOf(0) }
+                val mainPath = record.imagePaths.getOrElse(selected) { record.imagePaths.first() }
+                val bitmap = rememberSampledBitmap(mainPath, reqSizePx = 1440)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (bitmap != null) {
+                        ForegroundImage(
+                            bitmap = bitmap,
+                            contentDescription = null,
+                            contentScale = ContentScale.FillWidth,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        Box(modifier = Modifier.fillMaxWidth().height(200.dp))
+                    }
+                }
+
+                if (record.imagePaths.size > 1) {
+                    Spacer(Modifier.height(10.dp))
+                    androidx.compose.foundation.lazy.LazyRow(
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
                     ) {
-                        if (bitmap != null) {
-                            ForegroundImage(
-                                bitmap = bitmap,
-                                contentDescription = null,
-                                contentScale = ContentScale.FillWidth,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        } else {
-                            Box(modifier = Modifier.fillMaxWidth().height(200.dp))
+                        androidx.compose.foundation.lazy.itemsIndexed(record.imagePaths) { index, path ->
+                            val thumb = rememberSampledBitmap(path, reqSizePx = 256)
+                            Box(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .then(
+                                        if (index == selected) Modifier.border(
+                                            2.dp,
+                                            MaterialTheme.colorScheme.primary,
+                                            RoundedCornerShape(8.dp),
+                                        ) else Modifier,
+                                    )
+                                    .clickable { selected = index },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (thumb != null) {
+                                    ForegroundImage(
+                                        bitmap = thumb,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            }
                         }
                     }
-                    Spacer(Modifier.height(12.dp))
                 }
+                Spacer(Modifier.height(12.dp))
             }
 
             if (record.memo.isNotBlank()) {

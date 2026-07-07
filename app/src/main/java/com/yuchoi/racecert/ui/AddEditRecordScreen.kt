@@ -1,10 +1,14 @@
 package com.yuchoi.racecert.ui
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -24,6 +28,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -34,12 +41,14 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -63,6 +72,7 @@ import com.yuchoi.racecert.ocr.CertificateParser
 import com.yuchoi.racecert.ocr.OcrEngine
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -283,6 +293,44 @@ fun AddEditRecordScreen(
     val contentPicker = rememberLauncherForActivityResult(
         PickImagesViaChooser()
     ) { uris -> handlePickedUris(uris) }
+
+    // 대회 날짜 기준 기기 사진 그리드 (일주일 전~당일)
+    var showDeviceGrid by remember { mutableStateOf(false) }
+    var deviceLoading by remember { mutableStateOf(false) }
+    val devicePhotos = remember { mutableStateListOf<Uri>() }
+    val selectedDevice = remember { mutableStateListOf<Uri>() }
+
+    fun loadDevicePhotos() {
+        scope.launch {
+            deviceLoading = true
+            showDeviceGrid = true
+            selectedDevice.clear()
+            val photos = com.yuchoi.racecert.data.DevicePhotos.photosAround(context, date)
+            devicePhotos.clear()
+            devicePhotos.addAll(photos)
+            deviceLoading = false
+        }
+    }
+
+    val mediaPermission =
+        if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES
+        else Manifest.permission.READ_EXTERNAL_STORAGE
+    val mediaPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) loadDevicePhotos()
+        else Toast.makeText(context, "사진 접근 권한이 필요해요.", Toast.LENGTH_SHORT).show()
+    }
+
+    fun openDeviceGrid() {
+        if (ContextCompat.checkSelfPermission(context, mediaPermission) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            loadDevicePhotos()
+        } else {
+            mediaPermLauncher.launch(mediaPermission)
+        }
+    }
 
     // 장소 후보를 찾아 선택 다이얼로그를 띄운다
     fun searchPlaces() {
@@ -854,6 +902,82 @@ fun AddEditRecordScreen(
         )
     }
 
+    if (showDeviceGrid) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showDeviceGrid = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Card(modifier = Modifier.fillMaxWidth().padding(12.dp).height(560.dp)) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        "대회 무렵 사진 (${date.minusDays(7).format(formatter)} ~ ${date.format(formatter)})",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        when {
+                            deviceLoading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                            devicePhotos.isEmpty() -> Text(
+                                "이 기간에 촬영한 사진이 없어요.",
+                                modifier = Modifier.align(Alignment.Center),
+                            )
+                            else -> LazyVerticalGrid(
+                                columns = GridCells.Adaptive(96.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                gridItems(devicePhotos, key = { it.toString() }) { uri ->
+                                    val selected = uri in selectedDevice
+                                    Box(
+                                        modifier = Modifier
+                                            .size(96.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                                            .clickable {
+                                                if (selected) selectedDevice.remove(uri)
+                                                else selectedDevice.add(uri)
+                                            },
+                                    ) {
+                                        val bmp = rememberContentBitmap(context, uri, reqSizePx = 240)
+                                        if (bmp != null) {
+                                            ForegroundImage(
+                                                bitmap = bmp,
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize(),
+                                            )
+                                        }
+                                        if (selected) {
+                                            Icon(
+                                                Icons.Filled.CheckCircle,
+                                                contentDescription = "선택됨",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.align(Alignment.TopEnd).padding(2.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row {
+                        TextButton(onClick = { showDeviceGrid = false }) { Text("취소") }
+                        Spacer(Modifier.weight(1f))
+                        Button(
+                            onClick = {
+                                val picked = selectedDevice.toList()
+                                showDeviceGrid = false
+                                handlePickedUris(picked)
+                            },
+                            enabled = selectedDevice.isNotEmpty(),
+                        ) { Text("추가 (${selectedDevice.size})") }
+                    }
+                }
+            }
+        }
+    }
+
     if (showPhotoSourceDialog) {
         AlertDialog(
             onDismissRequest = { showPhotoSourceDialog = false },
@@ -876,6 +1000,13 @@ fun AddEditRecordScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text("🖼️ 기기 갤러리 / 다른 앱 선택") }
+                    TextButton(
+                        onClick = {
+                            showPhotoSourceDialog = false
+                            openDeviceGrid()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("📅 대회 무렵 사진 (일주일 전~당일)") }
                 }
             },
             confirmButton = {},

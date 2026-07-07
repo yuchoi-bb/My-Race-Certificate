@@ -132,6 +132,7 @@ object RecordStore {
                         weather = obj.optString("weather"),
                         bodyInfo = obj.optString("bodyInfo"),
                         bodyDateEpochDay = obj.optLong("bodyDateEpochDay"),
+                        entryFee = obj.optString("entryFee"),
                     )
                 )
             }
@@ -156,6 +157,7 @@ object RecordStore {
             obj.put("weather", record.weather)
             obj.put("bodyInfo", record.bodyInfo)
             obj.put("bodyDateEpochDay", record.bodyDateEpochDay)
+            obj.put("entryFee", record.entryFee)
             array.put(obj)
         }
         runCatching { dataFile.writeText(array.toString()) }

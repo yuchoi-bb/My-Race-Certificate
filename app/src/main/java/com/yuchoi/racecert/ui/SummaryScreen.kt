@@ -166,6 +166,10 @@ fun SummaryScreen(bottomBar: @Composable () -> Unit) {
     val thisYear = today.year
     val thisYearCount = records.count { it.date.year == thisYear }
     val typeCounts = records.groupingBy { it.type }.eachCount()
+    // 올해 참가비 합계 (참가비 문자열에서 숫자만 추출해 합산)
+    val thisYearFee = records
+        .filter { it.date.year == thisYear }
+        .sumOf { r -> r.entryFee.filter { it.isDigit() }.toLongOrNull() ?: 0L }
 
     Scaffold(
         topBar = {
@@ -211,6 +215,14 @@ fun SummaryScreen(bottomBar: @Composable () -> Unit) {
                                 parts.joinToString("  ·  "),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (thisYearFee > 0) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "올해 참가비 합계 ${"%,d".format(thisYearFee)}원",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
                             )
                         }
                     }

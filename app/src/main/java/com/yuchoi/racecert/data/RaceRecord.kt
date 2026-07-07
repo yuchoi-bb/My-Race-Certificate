@@ -30,6 +30,7 @@ data class RaceRecord(
     val weather: String = "",
     val bodyInfo: String = "",
     val bodyDateEpochDay: Long = 0,
+    val entryFee: String = "",
 ) {
     val date: LocalDate get() = LocalDate.ofEpochDay(dateEpochDay)
 

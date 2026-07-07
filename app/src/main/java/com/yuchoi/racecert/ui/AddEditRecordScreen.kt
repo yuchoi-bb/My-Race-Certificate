@@ -132,6 +132,7 @@ fun AddEditRecordScreen(
     var memo by remember { mutableStateOf(existing?.memo ?: "") }
     var recordTime by remember { mutableStateOf(existing?.recordTime ?: "") }
     var distance by remember { mutableStateOf(existing?.distance ?: "") }
+    var entryFee by remember { mutableStateOf(existing?.entryFee ?: "") }
     var ocrText by remember { mutableStateOf(existing?.ocrText ?: "") }
     var location by remember { mutableStateOf(existing?.location ?: "") }
     var weather by remember { mutableStateOf(existing?.weather ?: "") }
@@ -505,6 +506,15 @@ fun AddEditRecordScreen(
             Spacer(Modifier.height(12.dp))
 
             OutlinedTextField(
+                value = entryFee,
+                onValueChange = { entryFee = it },
+                label = { Text("대회 참가비 (예: 30,000원)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
                 value = location,
                 onValueChange = { location = it },
                 label = { Text("대회 장소 (날씨 조회용, 예: 수원)") },
@@ -595,6 +605,7 @@ fun AddEditRecordScreen(
                         weather = weather.trim(),
                         bodyInfo = bodyInfo.trim(),
                         bodyDateEpochDay = if (bodyInfo.isBlank()) 0 else (bodyDate?.toEpochDay() ?: 0),
+                        entryFee = entryFee.trim(),
                     )
                     RecordStore.upsert(record)
                     com.yuchoi.racecert.sync.DriveSync.requestSync(context)

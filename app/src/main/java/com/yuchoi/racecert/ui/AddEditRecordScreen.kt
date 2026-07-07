@@ -52,6 +52,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
+import com.yuchoi.racecert.net.ImageSearchService
 import com.yuchoi.racecert.net.WeatherService
 import com.yuchoi.racecert.ocr.CertificateParser
 import com.yuchoi.racecert.ocr.OcrEngine
@@ -217,6 +218,43 @@ fun AddEditRecordScreen(
         }
     }
 
+    // 예정 대회: 대회명으로 웹 이미지 검색 (가장 적합한 5장). 없으면 안내.
+    fun searchRaceImages() {
+        if (title.isBlank()) {
+            Toast.makeText(context, "먼저 대회 이름을 입력해 주세요.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        scope.launch {
+            webSearchLoading = true
+            val results = ImageSearchService.search(title.trim(), limit = 5)
+            webSearchLoading = false
+            if (results.isEmpty()) {
+                Toast.makeText(context, "‘${title.trim()}’ 대회 사진을 찾지 못했어요. (✕)", Toast.LENGTH_LONG).show()
+            } else {
+                webImages = results
+                showWebImageDialog = true
+            }
+        }
+    }
+
+    fun attachWebImage(image: ImageSearchService.WebImage) {
+        showWebImageDialog = false
+        if (imagePaths.size >= RaceRecord.MAX_IMAGES) {
+            Toast.makeText(context, "이미지는 최대 ${RaceRecord.MAX_IMAGES}장까지예요.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        scope.launch {
+            val path = RecordStore.importImageUrl(image.imageUrl)
+                ?: RecordStore.importImageUrl(image.thumbnailUrl)
+            if (path != null) {
+                imagePaths.add(path)
+                Toast.makeText(context, "대회 사진을 추가했어요.", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "사진을 내려받지 못했어요. 다른 이미지를 골라 주세요.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(RaceRecord.MAX_IMAGES)
     ) { uris -> handlePickedUris(uris) }
@@ -231,6 +269,10 @@ fun AddEditRecordScreen(
     var previewPath by remember { mutableStateOf<String?>(null) }
     // 날씨용 장소 후보 (선택 다이얼로그)
     var placeCandidates by remember { mutableStateOf<List<WeatherService.Place>>(emptyList()) }
+    // 예정 대회: 대회명 웹 이미지 검색 결과
+    var webImages by remember { mutableStateOf<List<ImageSearchService.WebImage>>(emptyList()) }
+    var webSearchLoading by remember { mutableStateOf(false) }
+    var showWebImageDialog by remember { mutableStateOf(false) }
 
     // 장소 후보를 찾아 선택 다이얼로그를 띄운다
     fun searchPlaces() {
@@ -407,6 +449,24 @@ fun AddEditRecordScreen(
                 onRemove = { path -> imagePaths.remove(path) },
                 onPreview = { path -> previewPath = path },
             )
+
+            // 예정 대회(미래 날짜)면 대회명으로 웹 이미지 검색 버튼 제공
+            if (date.isAfter(LocalDate.now())) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { searchRaceImages() },
+                    enabled = !webSearchLoading,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (webSearchLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("대회 사진 검색 중…")
+                    } else {
+                        Text("🔎 대회명으로 사진 검색 (웹, 최대 5장)")
+                    }
+                }
+            }
             Spacer(Modifier.height(8.dp))
 
             // 첨부된 사진 전체를 OCR로 다시 읽기 (사진 추가 시 자동 실행되지만 수동 재실행도 지원)
@@ -570,6 +630,43 @@ fun AddEditRecordScreen(
                 }
             }
         }
+    }
+
+    if (showWebImageDialog && webImages.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showWebImageDialog = false },
+            title = { Text("대회 사진 선택 (탭하면 추가)") },
+            text = {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(webImages, key = { it.imageUrl }) { img ->
+                        val bmp = rememberUrlBitmap(img.thumbnailUrl, reqSizePx = 400)
+                        Box(
+                            modifier = Modifier
+                                .size(140.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .clickable { attachWebImage(img) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (bmp != null) {
+                                ForegroundImage(
+                                    bitmap = bmp,
+                                    contentDescription = img.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            } else {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showWebImageDialog = false }) { Text("닫기") }
+            },
+        )
     }
 
     if (placeCandidates.isNotEmpty()) {

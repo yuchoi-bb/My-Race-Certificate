@@ -9,6 +9,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.UUID
 
 /**
@@ -69,6 +71,22 @@ object RecordStore {
             }
         }
         paths
+    }
+
+    /** 웹 이미지 URL을 내부 저장소로 다운로드하고 저장된 파일 경로를 반환한다. */
+    suspend fun importImageUrl(url: String): String? = withContext(Dispatchers.IO) {
+        val dest = File(imagesDir, "${UUID.randomUUID()}.jpg")
+        runCatching {
+            val conn = URL(url).openConnection() as HttpURLConnection
+            conn.setRequestProperty(
+                "User-Agent",
+                "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36",
+            )
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 15_000
+            conn.inputStream.use { input -> dest.outputStream().use { input.copyTo(it) } }
+        }
+        if (dest.exists() && dest.length() > 0) dest.absolutePath else null
     }
 
     private fun load() {

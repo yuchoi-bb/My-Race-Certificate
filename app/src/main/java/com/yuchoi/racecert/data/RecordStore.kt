@@ -1,6 +1,9 @@
 package com.yuchoi.racecert.data
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -101,6 +104,20 @@ object RecordStore {
             conn.inputStream.use { input -> dest.outputStream().use { input.copyTo(it) } }
         }
         if (dest.exists() && dest.length() > 0) dest.absolutePath else null
+    }
+
+    /** 이미지를 시계방향 90도 회전해 새 파일로 저장하고 경로를 반환한다. */
+    suspend fun rotateImage(path: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val src = BitmapFactory.decodeFile(path) ?: return@withContext null
+            val matrix = Matrix().apply { postRotate(90f) }
+            val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
+            val dest = File(imagesDir, "${UUID.randomUUID()}.jpg")
+            dest.outputStream().use { rotated.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+            if (src != rotated) src.recycle()
+            rotated.recycle()
+            if (dest.exists() && dest.length() > 0) dest.absolutePath else null
+        }.getOrNull()
     }
 
     private fun load() {

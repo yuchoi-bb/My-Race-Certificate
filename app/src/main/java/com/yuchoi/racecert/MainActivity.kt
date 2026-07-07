@@ -129,6 +129,8 @@ private fun App(
 
     // 홈 하단 탭: 0 = 기록 목록, 1 = 요약·PB
     var homeTab by remember { mutableStateOf(0) }
+    // 저장/수정 직후 목록에서 스크롤·강조할 기록 id
+    var scrollToId by remember { mutableStateOf<String?>(null) }
 
     when (val current = screen) {
         is Screen.List -> {
@@ -154,6 +156,8 @@ private fun App(
                     onOpenRecord = { screen = Screen.Detail(it) },
                     onCheckUpdate = { scope.launch { checkForUpdate(manual = true) } },
                     bottomBar = bottomBar,
+                    scrollToId = scrollToId,
+                    onScrolled = { scrollToId = null },
                 )
             } else {
                 BackHandler { homeTab = 0 }
@@ -172,12 +176,15 @@ private fun App(
         }
 
         is Screen.AddEdit -> {
-            val back = { screen = Screen.List }
             // 뒤로가기(시스템/상단)는 AddEditRecordScreen 내부에서 미저장 확인 후 처리
             AddEditRecordScreen(
                 recordId = current.recordId,
-                onDone = back,
-                onCancel = back,
+                onDone = { savedId ->
+                    scrollToId = savedId
+                    homeTab = 0
+                    screen = Screen.List
+                },
+                onCancel = { screen = Screen.List },
             )
         }
 

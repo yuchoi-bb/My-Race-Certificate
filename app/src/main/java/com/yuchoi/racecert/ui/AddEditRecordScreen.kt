@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -33,7 +34,10 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -120,7 +124,7 @@ private data class OcrSummary(
 @Composable
 fun AddEditRecordScreen(
     recordId: String?,
-    onDone: () -> Unit,
+    onDone: (String) -> Unit,
     onCancel: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -350,7 +354,7 @@ fun AddEditRecordScreen(
         )
         RecordStore.upsert(record)
         com.yuchoi.racecert.sync.DriveSync.requestSync(context)
-        onDone()
+        onDone(record.id)
     }
 
     // 저장하지 않은 변경사항이 있는지
@@ -506,6 +510,31 @@ fun AddEditRecordScreen(
                 },
                 onRemove = { path -> imagePaths.remove(path) },
                 onPreview = { path -> previewPath = path },
+                onRotate = { index ->
+                    val path = imagePaths.getOrNull(index) ?: return@ImageStrip
+                    scope.launch {
+                        val rotated = RecordStore.rotateImage(path)
+                        if (rotated != null && index < imagePaths.size) {
+                            imagePaths[index] = rotated
+                        } else {
+                            Toast.makeText(context, "회전에 실패했어요.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                onMoveLeft = { index ->
+                    if (index > 0) {
+                        val tmp = imagePaths[index]
+                        imagePaths[index] = imagePaths[index - 1]
+                        imagePaths[index - 1] = tmp
+                    }
+                },
+                onMoveRight = { index ->
+                    if (index < imagePaths.size - 1) {
+                        val tmp = imagePaths[index]
+                        imagePaths[index] = imagePaths[index + 1]
+                        imagePaths[index + 1] = tmp
+                    }
+                },
             )
 
             // 예정 대회(미래 날짜)면 대회명으로 웹 이미지 검색 버튼 제공
@@ -948,6 +977,9 @@ private fun ImageStrip(
     onAdd: () -> Unit,
     onRemove: (String) -> Unit,
     onPreview: (String) -> Unit,
+    onRotate: (Int) -> Unit,
+    onMoveLeft: (Int) -> Unit,
+    onMoveRight: (Int) -> Unit,
 ) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
@@ -965,37 +997,58 @@ private fun ImageStrip(
                 }
             }
         }
-        items(imagePaths, key = { it }) { path ->
-            Box(modifier = Modifier.size(96.dp)) {
-                val bitmap = rememberSampledBitmap(path, reqSizePx = 384)
-                if (bitmap != null) {
-                    ForegroundImage(
-                        bitmap = bitmap,
-                        contentDescription = "미리보기",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { onPreview(path) },
-                    )
-                }
-                IconButton(
-                    onClick = { onRemove(path) },
-                    modifier = Modifier.align(Alignment.TopEnd).size(28.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Filled.Close,
-                            contentDescription = "삭제",
-                            tint = androidx.compose.ui.graphics.Color.White,
-                            modifier = Modifier.size(16.dp),
+        itemsIndexed(imagePaths, key = { _, path -> path }) { index, path ->
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(modifier = Modifier.size(96.dp)) {
+                    val bitmap = rememberSampledBitmap(path, reqSizePx = 384)
+                    if (bitmap != null) {
+                        ForegroundImage(
+                            bitmap = bitmap,
+                            contentDescription = "미리보기",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { onPreview(path) },
                         )
+                    }
+                    IconButton(
+                        onClick = { onRemove(path) },
+                        modifier = Modifier.align(Alignment.TopEnd).size(28.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = "삭제",
+                                tint = androidx.compose.ui.graphics.Color.White,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+                }
+                // 순서 변경 / 회전 컨트롤
+                Row(
+                    modifier = Modifier.width(96.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    IconButton(onClick = { onMoveLeft(index) }, enabled = index > 0, modifier = Modifier.size(30.dp)) {
+                        Icon(Icons.Filled.ChevronLeft, contentDescription = "왼쪽으로", modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = { onRotate(index) }, modifier = Modifier.size(30.dp)) {
+                        Icon(Icons.Filled.RotateRight, contentDescription = "90도 회전", modifier = Modifier.size(18.dp))
+                    }
+                    IconButton(
+                        onClick = { onMoveRight(index) },
+                        enabled = index < imagePaths.size - 1,
+                        modifier = Modifier.size(30.dp),
+                    ) {
+                        Icon(Icons.Filled.ChevronRight, contentDescription = "오른쪽으로", modifier = Modifier.size(20.dp))
                     }
                 }
             }

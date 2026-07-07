@@ -1,6 +1,7 @@
 package com.yuchoi.racecert.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -37,10 +40,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -86,6 +91,8 @@ fun RecordListScreen(
     onOpenRecord: (String) -> Unit,
     onCheckUpdate: () -> Unit,
     bottomBar: @Composable () -> Unit = {},
+    scrollToId: String? = null,
+    onScrolled: () -> Unit = {},
 ) {
     // true = 최신순(내림차순), false = 오래된순(오름차순) — 지난 대회에만 적용
     var newestFirst by remember { mutableStateOf(true) }
@@ -102,6 +109,52 @@ fun RecordListScreen(
         val comparator = compareBy<RaceRecord>({ it.dateEpochDay }, { it.createdAt })
         val base = all.filter { !it.date.isAfter(today) }
         if (newestFirst) base.sortedWith(comparator.reversed()) else base.sortedWith(comparator)
+    }
+
+    // 목록을 행(row) 목록으로 평탄화해 인덱스로 스크롤할 수 있게 한다.
+    val rows: List<ListRow> = remember(upcoming, past, upcomingExpanded) {
+        buildList {
+            if (upcoming.isNotEmpty()) {
+                add(ListRow.SectionHeaderRow("📅 예정된 대회"))
+                add(ListRow.UpcomingRow(upcoming.first()))
+                if (upcoming.size > 1) {
+                    add(ListRow.ToggleRow(upcoming.size - 1))
+                    if (upcomingExpanded) upcoming.drop(1).forEach { add(ListRow.UpcomingRow(it)) }
+                }
+            }
+            var lastYear: Int? = null
+            past.forEach { r ->
+                if (r.date.year != lastYear) {
+                    lastYear = r.date.year
+                    add(ListRow.YearRow(r.date.year))
+                }
+                add(ListRow.RecordRow(r))
+            }
+        }
+    }
+
+    val listState = rememberLazyListState()
+    var highlightId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(scrollToId, rows) {
+        val id = scrollToId ?: return@LaunchedEffect
+        // 접혀 있는 예정 대회가 대상이면 먼저 펼친다 (rows 변경 시 effect 재실행)
+        if (upcoming.size > 1 && !upcomingExpanded && upcoming.drop(1).any { it.id == id }) {
+            upcomingExpanded = true
+            return@LaunchedEffect
+        }
+        val idx = rows.indexOfFirst {
+            (it is ListRow.UpcomingRow && it.record.id == id) ||
+                (it is ListRow.RecordRow && it.record.id == id)
+        }
+        if (idx >= 0) {
+            listState.animateScrollToItem(idx)
+            highlightId = id
+            onScrolled()
+            delay(1800)
+            if (highlightId == id) highlightId = null
+        } else {
+            onScrolled()
+        }
     }
 
     Scaffold(
@@ -144,6 +197,7 @@ fun RecordListScreen(
             EmptyState(Modifier.fillMaxSize().padding(innerPadding))
         } else {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     top = innerPadding.calculateTopPadding() + 8.dp,
@@ -153,62 +207,57 @@ fun RecordListScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                if (upcoming.isNotEmpty()) {
-                    item(key = "upcoming-header") {
-                        SectionHeader("📅 예정된 대회")
-                    }
-                    // 가장 가까운 대회 1개만 항상 표시, 나머지는 접어 둠
-                    item(key = "up-${upcoming.first().id}") {
-                        UpcomingCard(
-                            record = upcoming.first(),
-                            daysLeft = ChronoUnit.DAYS.between(today, upcoming.first().date),
-                            onClick = { onOpenRecord(upcoming.first().id) },
+                items(rows, key = { it.key }) { row ->
+                    when (row) {
+                        is ListRow.SectionHeaderRow -> SectionHeader(row.text)
+                        is ListRow.YearRow -> YearHeader(row.year)
+                        is ListRow.ToggleRow -> TextButton(onClick = { upcomingExpanded = !upcomingExpanded }) {
+                            Icon(
+                                imageVector = if (upcomingExpanded) Icons.Filled.ArrowUpward
+                                else Icons.Filled.ArrowDownward,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                if (upcomingExpanded) "예정 대회 접기"
+                                else "예정 대회 ${row.moreCount}개 더 보기",
+                            )
+                        }
+                        is ListRow.UpcomingRow -> UpcomingCard(
+                            record = row.record,
+                            daysLeft = ChronoUnit.DAYS.between(today, row.record.date),
+                            onClick = { onOpenRecord(row.record.id) },
+                            highlighted = row.record.id == highlightId,
                         )
-                    }
-                    if (upcoming.size > 1) {
-                        item(key = "upcoming-toggle") {
-                            TextButton(onClick = { upcomingExpanded = !upcomingExpanded }) {
-                                Icon(
-                                    imageVector = if (upcomingExpanded) Icons.Filled.ArrowUpward
-                                    else Icons.Filled.ArrowDownward,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text(
-                                    if (upcomingExpanded) "예정 대회 접기"
-                                    else "예정 대회 ${upcoming.size - 1}개 더 보기",
-                                )
-                            }
-                        }
-                        if (upcomingExpanded) {
-                            upcoming.drop(1).forEach { record ->
-                                item(key = "up-${record.id}") {
-                                    UpcomingCard(
-                                        record = record,
-                                        daysLeft = ChronoUnit.DAYS.between(today, record.date),
-                                        onClick = { onOpenRecord(record.id) },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 지난 대회: 연도가 바뀔 때마다 연도 헤더 삽입
-                var lastYear: Int? = null
-                past.forEach { record ->
-                    val year = record.date.year
-                    if (year != lastYear) {
-                        lastYear = year
-                        item(key = "year-$year") { YearHeader(year) }
-                    }
-                    item(key = record.id) {
-                        RecordCard(record = record, onClick = { onOpenRecord(record.id) })
+                        is ListRow.RecordRow -> RecordCard(
+                            record = row.record,
+                            onClick = { onOpenRecord(row.record.id) },
+                            highlighted = row.record.id == highlightId,
+                        )
                     }
                 }
             }
         }
+    }
+}
+
+private sealed interface ListRow {
+    val key: String
+    data class SectionHeaderRow(val text: String) : ListRow {
+        override val key get() = "hdr-$text"
+    }
+    data class YearRow(val year: Int) : ListRow {
+        override val key get() = "year-$year"
+    }
+    data class ToggleRow(val moreCount: Int) : ListRow {
+        override val key get() = "upcoming-toggle"
+    }
+    data class UpcomingRow(val record: RaceRecord) : ListRow {
+        override val key get() = "up-${record.id}"
+    }
+    data class RecordRow(val record: RaceRecord) : ListRow {
+        override val key get() = record.id
     }
 }
 
@@ -240,9 +289,16 @@ private fun YearHeader(year: Int) {
 }
 
 @Composable
-private fun UpcomingCard(record: RaceRecord, daysLeft: Long, onClick: () -> Unit) {
+private fun UpcomingCard(
+    record: RaceRecord,
+    daysLeft: Long,
+    onClick: () -> Unit,
+    highlighted: Boolean = false,
+) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth()
+            .then(if (highlighted) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)) else Modifier)
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = PastelAmber),
     ) {
         Row(
@@ -289,9 +345,11 @@ private fun UpcomingCard(record: RaceRecord, daysLeft: Long, onClick: () -> Unit
 }
 
 @Composable
-private fun RecordCard(record: RaceRecord, onClick: () -> Unit) {
+private fun RecordCard(record: RaceRecord, onClick: () -> Unit, highlighted: Boolean = false) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth()
+            .then(if (highlighted) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)) else Modifier)
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = cardColor(record)),
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {

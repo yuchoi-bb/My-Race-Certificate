@@ -2,6 +2,7 @@ package com.yuchoi.racecert.net
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -10,18 +11,17 @@ import java.net.URLEncoder
 import java.time.LocalDate
 
 /**
- * Open-Meteo(무료, API 키 불필요)로 대회 장소+날짜의 날씨를 가져온다.
- * 실패 원인을 구분해 돌려주므로 UI에서 사용자에게 정확히 안내할 수 있다.
+ * 대회 장소+날짜의 날씨를 가져온다.
+ * - 지오코딩: 한국 지명/장소명에 강한 Nominatim(OSM)을 1순위, Open-Meteo를 보조로 사용
+ * - 날씨: Open-Meteo (무료·API 키 불필요). 과거 날짜는 archive, 최근/미래는 forecast
+ * 실패 원인을 구분해 돌려주므로 UI에서 정확히 안내할 수 있다.
  */
 object WeatherService {
 
     sealed interface Result {
         data class Success(val text: String) : Result
-        /** 장소 이름으로 좌표를 못 찾음 */
         data object PlaceNotFound : Result
-        /** 좌표는 찾았으나 해당 날짜 날씨 데이터가 없음 */
         data object NoWeatherData : Result
-        /** 네트워크/서버 오류 */
         data object NetworkError : Result
     }
 
@@ -31,7 +31,6 @@ object WeatherService {
         try {
             val point = resolveLocation(place) ?: return@withContext Result.PlaceNotFound
 
-            // archive는 며칠 지연이 있으므로 최근 5일 이내/미래는 forecast API로
             val base = if (date.isBefore(LocalDate.now().minusDays(5))) {
                 "https://archive-api.open-meteo.com/v1/archive"
             } else {
@@ -39,9 +38,11 @@ object WeatherService {
             }
             val daily = "weather_code,temperature_2m_max,temperature_2m_min," +
                 "precipitation_sum,wind_speed_10m_max"
-            val weatherJson = getJson(
-                "$base?latitude=${point.lat}&longitude=${point.lon}" +
-                    "&start_date=$date&end_date=$date&daily=$daily&timezone=auto",
+            val weatherJson = JSONObject(
+                httpGet(
+                    "$base?latitude=${point.lat}&longitude=${point.lon}" +
+                        "&start_date=$date&end_date=$date&daily=$daily&timezone=auto",
+                ),
             )
             val d = weatherJson.optJSONObject("daily") ?: return@withContext Result.NoWeatherData
             val codes = d.optJSONArray("weather_code")
@@ -69,33 +70,55 @@ object WeatherService {
         }
     }
 
-    /**
-     * 장소 이름 → 좌표. 한국 지명에 맞춰 여러 후보를 시도한다:
-     * 원문 → 행정/장소 접미사 제거본 순으로 조회하고, 한국(KR) 결과를 우선한다.
-     */
+    /** 장소 이름 → 좌표. Nominatim(OSM) 우선, 실패 시 Open-Meteo 지오코딩. */
     private fun resolveLocation(place: String): GeoPoint? {
+        val query = place.trim()
+        if (query.isEmpty()) return null
+
+        // 1) Nominatim: 한글 지명·경기장/운동장 같은 장소명도 잘 찾음
+        runCatching {
+            val body = httpGet(
+                "https://nominatim.openstreetmap.org/search?q=" +
+                    URLEncoder.encode(query, "UTF-8") +
+                    "&format=jsonv2&limit=1&accept-language=ko",
+            )
+            val arr = JSONArray(body)
+            if (arr.length() > 0) {
+                val o = arr.getJSONObject(0)
+                val lat = o.optString("lat").toDoubleOrNull()
+                val lon = o.optString("lon").toDoubleOrNull()
+                if (lat != null && lon != null) {
+                    val name = o.optString("name").ifBlank {
+                        o.optString("display_name").substringBefore(',').ifBlank { query }
+                    }
+                    return GeoPoint(lat, lon, name)
+                }
+            }
+        }
+
+        // 2) Open-Meteo 지오코딩 (접미사 제거 후보 포함)
         val candidates = buildList {
-            add(place.trim())
-            // "수원종합운동장" → "수원", "화성시" → "화성" 등 접미사 제거
-            val stripped = place.trim()
-                .replace(Regex("(특례시|광역시|특별자치시|특별시|시|군|구|읍|면|동|종합운동장|경기장|스타디움|월드컵경기장)$"), "")
-                .trim()
-            if (stripped.isNotEmpty() && stripped != place.trim()) add(stripped)
-            // 공백이 있으면 첫 단어만 (예: "경기 수원" → "수원"은 아님; "수원 종합운동장" → "수원")
-            val firstWord = place.trim().substringBefore(' ').trim()
+            add(query)
+            val stripped = query.replace(
+                Regex("(특례시|광역시|특별자치시|특별시|시|군|구|읍|면|동|종합운동장|경기장|스타디움|월드컵경기장)$"),
+                "",
+            ).trim()
+            if (stripped.isNotEmpty() && stripped != query) add(stripped)
+            val firstWord = query.substringBefore(' ').trim()
             if (firstWord.isNotEmpty()) add(firstWord)
         }.distinct().filter { it.isNotEmpty() }
 
         for (name in candidates) {
             val geo = runCatching {
-                getJson(
-                    "https://geocoding-api.open-meteo.com/v1/search?name=" +
-                        URLEncoder.encode(name, "UTF-8") + "&count=10&language=ko&format=json",
+                JSONObject(
+                    httpGet(
+                        "https://geocoding-api.open-meteo.com/v1/search?name=" +
+                            URLEncoder.encode(name, "UTF-8") + "&count=10&language=ko&format=json",
+                    ),
                 )
             }.getOrNull() ?: continue
             val results = geo.optJSONArray("results") ?: continue
             if (results.length() == 0) continue
-            // 한국(KR) 결과를 우선, 없으면 첫 번째
             var chosen = results.getJSONObject(0)
             for (i in 0 until results.length()) {
                 val r = results.getJSONObject(i)
@@ -131,18 +154,20 @@ object WeatherService {
         else -> "날씨 정보"
     }
 
-    /** HTTP GET → JSON. 비정상 응답/네트워크 실패는 예외로 던진다. */
-    private fun getJson(url: String): JSONObject {
+    /** HTTP GET → 응답 본문 문자열. 비정상 응답/네트워크 실패는 예외로 던진다. */
+    private fun httpGet(url: String): String {
         val connection = URL(url).openConnection() as HttpURLConnection
         try {
             connection.connectTimeout = 12_000
             connection.readTimeout = 12_000
-            connection.setRequestProperty("User-Agent", "MyRaceCertificate-Android")
+            // Nominatim 이용약관: 앱을 식별하는 User-Agent 필수
+            connection.setRequestProperty("User-Agent", "MyRaceCertificate-Android (race cert app)")
+            connection.instanceFollowRedirects = true
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
             if (code !in 200..299) throw IOException("HTTP $code")
-            return JSONObject(body)
+            return body
         } finally {
             connection.disconnect()
         }

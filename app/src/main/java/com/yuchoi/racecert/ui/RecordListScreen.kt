@@ -89,6 +89,8 @@ fun RecordListScreen(
 ) {
     // true = 최신순(내림차순), false = 오래된순(오름차순) — 지난 대회에만 적용
     var newestFirst by remember { mutableStateOf(true) }
+    // 예정 대회: 가장 가까운 1개만 보이고 나머지는 접힘
+    var upcomingExpanded by remember { mutableStateOf(false) }
 
     val today = LocalDate.now()
     val all = RecordStore.records.toList()
@@ -155,13 +157,40 @@ fun RecordListScreen(
                     item(key = "upcoming-header") {
                         SectionHeader("📅 예정된 대회")
                     }
-                    upcoming.forEach { record ->
-                        item(key = "up-${record.id}") {
-                            UpcomingCard(
-                                record = record,
-                                daysLeft = ChronoUnit.DAYS.between(today, record.date),
-                                onClick = { onOpenRecord(record.id) },
-                            )
+                    // 가장 가까운 대회 1개만 항상 표시, 나머지는 접어 둠
+                    item(key = "up-${upcoming.first().id}") {
+                        UpcomingCard(
+                            record = upcoming.first(),
+                            daysLeft = ChronoUnit.DAYS.between(today, upcoming.first().date),
+                            onClick = { onOpenRecord(upcoming.first().id) },
+                        )
+                    }
+                    if (upcoming.size > 1) {
+                        item(key = "upcoming-toggle") {
+                            TextButton(onClick = { upcomingExpanded = !upcomingExpanded }) {
+                                Icon(
+                                    imageVector = if (upcomingExpanded) Icons.Filled.ArrowUpward
+                                    else Icons.Filled.ArrowDownward,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    if (upcomingExpanded) "예정 대회 접기"
+                                    else "예정 대회 ${upcoming.size - 1}개 더 보기",
+                                )
+                            }
+                        }
+                        if (upcomingExpanded) {
+                            upcoming.drop(1).forEach { record ->
+                                item(key = "up-${record.id}") {
+                                    UpcomingCard(
+                                        record = record,
+                                        daysLeft = ChronoUnit.DAYS.between(today, record.date),
+                                        onClick = { onOpenRecord(record.id) },
+                                    )
+                                }
+                            }
                         }
                     }
                 }

@@ -10,25 +10,34 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yuchoi.racecert.BuildConfig
+import com.yuchoi.racecert.data.BackupManager
 import com.yuchoi.racecert.data.RaceRecord
 import com.yuchoi.racecert.data.RaceType
 import com.yuchoi.racecert.data.RecordStore
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -78,6 +87,38 @@ private fun computePbs(records: List<RaceRecord>): List<PbEntry> =
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SummaryScreen(bottomBar: @Composable () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // 백업 저장 (SAF → Google Drive 등)
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val ok = BackupManager.export(context, uri)
+            Toast.makeText(
+                context,
+                if (ok) "백업을 저장했어요. Google Drive 등에서 확인하세요." else "백업 저장에 실패했어요.",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+    // 복원 (SAF에서 백업 zip 선택)
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val ok = BackupManager.import(context, uri)
+            Toast.makeText(
+                context,
+                if (ok) "백업을 복원했어요." else "복원에 실패했어요. 올바른 백업 파일인지 확인해 주세요.",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+
     val all = RecordStore.records.toList()
     val today = LocalDate.now()
     // 예정(미래) 대회는 참가 통계에서 제외
@@ -183,6 +224,34 @@ fun SummaryScreen(bottomBar: @Composable () -> Unit) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                    }
+                }
+            }
+
+            item(key = "backup") {
+                Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("백업 / 복원", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "기록·사진을 하나의 파일로 저장해 Google Drive에 올리고, 다른 폰에서 그 파일을 불러와 복원할 수 있어요.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = { exportLauncher.launch(BackupManager.suggestedFileName()) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("☁️ 백업 저장 (Google Drive 등)") }
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                importLauncher.launch(
+                                    arrayOf("application/zip", "application/octet-stream", "*/*"),
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("📥 백업 파일에서 복원") }
                     }
                 }
             }

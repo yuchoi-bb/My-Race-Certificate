@@ -34,6 +34,11 @@ object RecordStore {
         load()
     }
 
+    /** 백업 복원 후 디스크에서 다시 읽어 목록을 갱신한다. */
+    fun reload() {
+        load()
+    }
+
     fun find(id: String): RaceRecord? = records.firstOrNull { it.id == id }
 
     fun newId(): String = UUID.randomUUID().toString()
@@ -97,7 +102,11 @@ object RecordStore {
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
                 val imagesJson = obj.optJSONArray("imagePaths") ?: JSONArray()
-                val images = (0 until imagesJson.length()).map { imagesJson.getString(it) }
+                // 이미지 경로는 파일명만 취해 현재 기기의 images 폴더로 재매핑한다.
+                // (다른 기기에서 복원해도 경로가 어긋나지 않도록)
+                val images = (0 until imagesJson.length())
+                    .map { imagesJson.getString(it) }
+                    .map { File(imagesDir, File(it).name).absolutePath }
                 records.add(
                     RaceRecord(
                         id = obj.getString("id"),

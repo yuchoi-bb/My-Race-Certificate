@@ -150,6 +150,15 @@ fun AddEditRecordScreen(
     var typeManuallySet by remember { mutableStateOf(existing != null) }
     // OCR 완료 후 필수 항목(대회 이름·날짜·기록) 인식 결과 안내 다이얼로그
     var ocrSummary by remember { mutableStateOf<OcrSummary?>(null) }
+    var showPhotoSourceDialog by remember { mutableStateOf(false) }
+    // 탭한 썸네일을 크게 보는 미리보기
+    var previewPath by remember { mutableStateOf<String?>(null) }
+    // 날씨용 장소 후보 (선택 다이얼로그)
+    var placeCandidates by remember { mutableStateOf<List<WeatherService.Place>>(emptyList()) }
+    // 예정 대회: 대회명 웹 이미지 검색 결과
+    var webImages by remember { mutableStateOf<List<ImageSearchService.WebImage>>(emptyList()) }
+    var webSearchLoading by remember { mutableStateOf(false) }
+    var showWebImageDialog by remember { mutableStateOf(false) }
 
     // 첨부된 모든 사진을 OCR로 읽어 빈 칸을 초안으로 채운다. 사용자는 이후 자유롭게 수정 가능.
     suspend fun runOcrOnAllImages() {
@@ -263,16 +272,6 @@ fun AddEditRecordScreen(
     val contentPicker = rememberLauncherForActivityResult(
         PickImagesViaChooser()
     ) { uris -> handlePickedUris(uris) }
-
-    var showPhotoSourceDialog by remember { mutableStateOf(false) }
-    // 탭한 썸네일을 크게 보는 미리보기
-    var previewPath by remember { mutableStateOf<String?>(null) }
-    // 날씨용 장소 후보 (선택 다이얼로그)
-    var placeCandidates by remember { mutableStateOf<List<WeatherService.Place>>(emptyList()) }
-    // 예정 대회: 대회명 웹 이미지 검색 결과
-    var webImages by remember { mutableStateOf<List<ImageSearchService.WebImage>>(emptyList()) }
-    var webSearchLoading by remember { mutableStateOf(false) }
-    var showWebImageDialog by remember { mutableStateOf(false) }
 
     // 장소 후보를 찾아 선택 다이얼로그를 띄운다
     fun searchPlaces() {

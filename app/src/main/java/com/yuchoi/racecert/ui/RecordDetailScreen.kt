@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -199,10 +201,10 @@ fun RecordDetailScreen(
 
                 if (record.imagePaths.size > 1) {
                     Spacer(Modifier.height(10.dp))
-                    androidx.compose.foundation.lazy.LazyRow(
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        androidx.compose.foundation.lazy.itemsIndexed(record.imagePaths) { index, path ->
+                        itemsIndexed(record.imagePaths) { index, path ->
                             val thumb = rememberSampledBitmap(path, reqSizePx = 256)
                             Box(
                                 modifier = Modifier

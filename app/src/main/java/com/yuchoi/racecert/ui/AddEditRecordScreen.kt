@@ -52,9 +52,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
-import androidx.health.connect.client.HealthConnectClient
-import androidx.health.connect.client.PermissionController
-import com.yuchoi.racecert.health.HealthHelper
 import com.yuchoi.racecert.net.WeatherService
 import com.yuchoi.racecert.ocr.CertificateParser
 import com.yuchoi.racecert.ocr.OcrEngine
@@ -138,12 +135,13 @@ fun AddEditRecordScreen(
     var location by remember { mutableStateOf(existing?.location ?: "") }
     var weather by remember { mutableStateOf(existing?.weather ?: "") }
     var bodyInfo by remember { mutableStateOf(existing?.bodyInfo ?: "") }
+    var bodyDate by remember { mutableStateOf(existing?.bodyDate) }
     var weatherLoading by remember { mutableStateOf(false) }
-    var bodyLoading by remember { mutableStateOf(false) }
     val imagePaths: SnapshotStateList<String> =
         remember { existing?.imagePaths.orEmpty().toMutableStateList() }
 
     var showDatePicker by remember { mutableStateOf(false) }
+    var showBodyDatePicker by remember { mutableStateOf(false) }
     var typeExpanded by remember { mutableStateOf(false) }
     var ocrRunning by remember { mutableStateOf(false) }
     // OCR가 날짜/종목을 함부로 덮어쓰지 않도록, 사용자가 직접 만졌는지 추적
@@ -251,71 +249,6 @@ fun AddEditRecordScreen(
                     Toast.LENGTH_LONG,
                 ).show()
             }
-        }
-    }
-
-    // Health Connect에서 대회일 전후 몸무게/체지방 읽기 (가민 커넥트 동기화 데이터)
-    suspend fun fetchBodyInfo() {
-        bodyLoading = true
-        val result = runCatching { HealthHelper.readBodyInfo(context, date) }.getOrNull()
-        bodyLoading = false
-        if (result != null) {
-            bodyInfo = result
-        } else {
-            Toast.makeText(
-                context,
-                "대회일 전후(±3일) 데이터가 없어요. 가민 커넥트 앱 설정에서 Health Connect 동기화를 켰는지 확인해 주세요.",
-                Toast.LENGTH_LONG,
-            ).show()
-        }
-    }
-
-    fun openHealthConnectSettings() {
-        val opened = runCatching {
-            context.startActivity(Intent(HealthConnectClient.ACTION_HEALTH_CONNECT_SETTINGS))
-        }.isSuccess
-        if (!opened) {
-            Toast.makeText(context, "Health Connect 설정을 열 수 없어요.", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    val healthPermissionLauncher = rememberLauncherForActivityResult(
-        PermissionController.createRequestPermissionResultContract()
-    ) { granted ->
-        if (granted.containsAll(HealthHelper.permissions)) {
-            scope.launch { fetchBodyInfo() }
-        } else {
-            Toast.makeText(
-                context,
-                "몸무게·체지방 읽기를 허용해 주세요. Health Connect 설정을 엽니다.",
-                Toast.LENGTH_LONG,
-            ).show()
-            openHealthConnectSettings()
-        }
-    }
-
-    fun onFetchBodyInfoClick() {
-        when (HealthHelper.sdkStatus(context)) {
-            HealthConnectClient.SDK_AVAILABLE -> scope.launch {
-                if (HealthHelper.hasPermissions(context)) {
-                    fetchBodyInfo()
-                } else {
-                    runCatching { healthPermissionLauncher.launch(HealthHelper.permissions) }
-                        .onFailure {
-                            Toast.makeText(
-                                context,
-                                "권한 화면을 열 수 없어요. Health Connect 설정에서 직접 허용해 주세요.",
-                                Toast.LENGTH_LONG,
-                            ).show()
-                            openHealthConnectSettings()
-                        }
-                }
-            }
-            else -> Toast.makeText(
-                context,
-                "이 기기에서 Health Connect(헬스 커넥트)를 사용할 수 없어요. 플레이스토어에서 설치/업데이트해 주세요.",
-                Toast.LENGTH_LONG,
-            ).show()
         }
     }
 
@@ -482,27 +415,31 @@ fun AddEditRecordScreen(
             )
             Spacer(Modifier.height(12.dp))
 
-            OutlinedButton(
-                onClick = { onFetchBodyInfoClick() },
-                enabled = !bodyLoading,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (bodyLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text("건강 데이터 읽는 중…")
-                } else {
-                    Text("⌚ 가민 몸무게·체지방 가져오기 (Health Connect)")
-                }
-            }
-            Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = bodyInfo,
                 onValueChange = { bodyInfo = it },
-                label = { Text("대회 당일 몸 상태 (몸무게/체지방)") },
+                label = { Text("대회 주변 몸 상태 (예: 70.5kg, 체지방 18%)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { showBodyDatePicker = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Filled.CalendarMonth, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                val label = bodyDate?.let { bd ->
+                    val diff = bd.toEpochDay() - date.toEpochDay()
+                    val offset = when {
+                        diff == 0L -> "대회 당일"
+                        diff < 0 -> "대회 ${diff}일"
+                        else -> "대회 +${diff}일"
+                    }
+                    "측정일: ${bd.format(formatter)} ($offset)"
+                } ?: "몸 상태 측정일 선택 (대회일 기준 -N/+N일 표시)"
+                Text(label)
+            }
             Spacer(Modifier.height(16.dp))
 
             OutlinedTextField(
@@ -537,6 +474,7 @@ fun AddEditRecordScreen(
                         location = location.trim(),
                         weather = weather.trim(),
                         bodyInfo = bodyInfo.trim(),
+                        bodyDateEpochDay = if (bodyInfo.isBlank()) 0 else (bodyDate?.toEpochDay() ?: 0),
                     )
                     RecordStore.upsert(record)
                     onDone()
@@ -662,6 +600,27 @@ fun AddEditRecordScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDatePicker = false }) { Text("취소") }
+            },
+        ) {
+            DatePicker(state = state)
+        }
+    }
+
+    if (showBodyDatePicker) {
+        val initial = (bodyDate ?: date).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        val state = rememberDatePickerState(initialSelectedDateMillis = initial)
+        DatePickerDialog(
+            onDismissRequest = { showBodyDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { millis ->
+                        bodyDate = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
+                    }
+                    showBodyDatePicker = false
+                }) { Text("확인") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBodyDatePicker = false }) { Text("취소") }
             },
         ) {
             DatePicker(state = state)

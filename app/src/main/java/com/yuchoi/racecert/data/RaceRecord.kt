@@ -29,8 +29,22 @@ data class RaceRecord(
     val location: String = "",
     val weather: String = "",
     val bodyInfo: String = "",
+    val bodyDateEpochDay: Long = 0,
 ) {
     val date: LocalDate get() = LocalDate.ofEpochDay(dateEpochDay)
+
+    /** 몸 상태를 잰 날짜 (미설정이면 null) */
+    val bodyDate: LocalDate? get() = if (bodyDateEpochDay > 0) LocalDate.ofEpochDay(bodyDateEpochDay) else null
+
+    /** 몸 상태 측정일이 대회일 기준 며칠 전/후인지 라벨 (예: "대회 -3일", "대회 +2일") */
+    val bodyOffsetLabel: String
+        get() {
+            val bd = bodyDate ?: return ""
+            return when (val diff = bd.toEpochDay() - dateEpochDay) {
+                0L -> "대회 당일"
+                else -> if (diff < 0) "대회 ${diff}일" else "대회 +${diff}일"
+            }
+        }
 
     companion object {
         const val MAX_IMAGES = 10

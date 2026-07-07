@@ -130,7 +130,10 @@ fun RecordDetailScreen(
                             Spacer(Modifier.height(4.dp))
                         }
                         if (record.bodyInfo.isNotBlank()) {
-                            Text("⚖️ ${record.bodyInfo}", style = MaterialTheme.typography.bodyMedium)
+                            val offset = record.bodyOffsetLabel
+                            val text = if (offset.isBlank()) "⚖️ ${record.bodyInfo}"
+                            else "⚖️ ${record.bodyInfo}  ($offset)"
+                            Text(text, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }

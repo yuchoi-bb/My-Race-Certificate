@@ -95,6 +95,7 @@ object RecordStore {
                         location = obj.optString("location"),
                         weather = obj.optString("weather"),
                         bodyInfo = obj.optString("bodyInfo"),
+                        bodyDateEpochDay = obj.optLong("bodyDateEpochDay"),
                     )
                 )
             }
@@ -118,6 +119,7 @@ object RecordStore {
             obj.put("location", record.location)
             obj.put("weather", record.weather)
             obj.put("bodyInfo", record.bodyInfo)
+            obj.put("bodyDateEpochDay", record.bodyDateEpochDay)
             array.put(obj)
         }
         runCatching { dataFile.writeText(array.toString()) }

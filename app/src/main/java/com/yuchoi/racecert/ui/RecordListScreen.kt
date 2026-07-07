@@ -220,6 +220,8 @@ private fun UpcomingCard(record: RaceRecord, daysLeft: Long, onClick: () -> Unit
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Thumbnail(path = record.imagePaths.firstOrNull())
+            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = record.title.ifBlank { "(제목 없음)" },

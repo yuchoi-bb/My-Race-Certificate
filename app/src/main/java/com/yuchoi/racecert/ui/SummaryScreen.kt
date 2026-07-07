@@ -13,12 +13,14 @@ import androidx.compose.foundation.layout.width
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -47,6 +49,20 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 private val pbDateFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
+
+private val categoryOrder = listOf("10K", "하프", "풀코스", "기타", "거리 미입력")
+
+/** 거리 문자열을 참가 요약용 카테고리로 분류 */
+private fun distanceCategory(distance: String): String {
+    val d = distance.trim().uppercase().replace(" ", "")
+    return when {
+        d.isEmpty() -> "거리 미입력"
+        d.contains("하프") || d.contains("HALF") || d.contains("21") -> "하프"
+        d.contains("풀") || d.contains("FULL") || d.contains("42") -> "풀코스"
+        d.contains("10") -> "10K"
+        else -> "기타"
+    }
+}
 
 private fun syncMessage(r: DriveSync.SyncResult): String = when (r) {
     DriveSync.SyncResult.UPLOADED -> "이 폰의 기록을 Drive에 올렸어요."
@@ -171,6 +187,13 @@ fun SummaryScreen(bottomBar: @Composable () -> Unit) {
     val thisYearFee = thisYearRecords.sumOf { it.totalFeeAmount }
     val thisYearEventFee = thisYearRecords.sumOf { it.eventFeeAmount }
 
+    // 거리(카테고리) × 연도별 참가 횟수
+    val breakdown: Map<String, Map<Int, Int>> = remember(records) {
+        records.groupBy { distanceCategory(it.distance) }
+            .mapValues { (_, list) -> list.groupingBy { it.date.year }.eachCount() }
+    }
+    var summaryExpanded by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -198,9 +221,20 @@ fun SummaryScreen(bottomBar: @Composable () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                        .clickable { summaryExpanded = !summaryExpanded },
+                ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("참가 요약", style = MaterialTheme.typography.titleMedium)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("참가 요약", style = MaterialTheme.typography.titleMedium)
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                if (summaryExpanded) "접기 ▲" else "거리·연도별 보기 ▼",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                         Spacer(Modifier.height(12.dp))
                         Row {
                             StatItem("전체 대회", "${records.size}회", Modifier.weight(1f))
@@ -225,6 +259,42 @@ fun SummaryScreen(bottomBar: @Composable () -> Unit) {
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
                             )
+                        }
+
+                        if (summaryExpanded) {
+                            Spacer(Modifier.height(12.dp))
+                            HorizontalDivider()
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "거리별 · 연도별 참가",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            if (breakdown.isEmpty()) {
+                                Text(
+                                    "아직 참가 기록이 없어요.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            } else {
+                                categoryOrder.forEach { cat ->
+                                    val years = breakdown[cat] ?: return@forEach
+                                    val total = years.values.sum()
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        "$cat · 총 ${total}회",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Text(
+                                        years.toSortedMap(compareByDescending { it })
+                                            .entries.joinToString("  ·  ") { (y, c) -> "${y}년 ${c}회" },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
                         }
                     }
                 }

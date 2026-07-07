@@ -39,12 +39,30 @@ object BackupManager {
         }.getOrDefault(false)
     }
 
-    suspend fun import(context: Context, uri: Uri): Boolean = withContext(Dispatchers.IO) {
-        runCatching {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                readZip(context, input)
-            } ?: false
-        }.getOrDefault(false)
+    sealed interface ImportResult {
+        data object Success : ImportResult
+        data object CantOpen : ImportResult
+        data object NotAZip : ImportResult
+        data object NoRecords : ImportResult
+        data object IoError : ImportResult
+    }
+
+    suspend fun import(context: Context, uri: Uri): ImportResult = withContext(Dispatchers.IO) {
+        val bytes = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        }.getOrNull() ?: return@withContext ImportResult.CantOpen
+        // zip 매직 바이트(PK) 확인
+        if (bytes.size < 4 || bytes[0] != 'P'.code.toByte() || bytes[1] != 'K'.code.toByte()) {
+            return@withContext ImportResult.NotAZip
+        }
+        try {
+            if (readZip(context, ByteArrayInputStream(bytes))) ImportResult.Success
+            else ImportResult.NoRecords
+        } catch (_: java.util.zip.ZipException) {
+            ImportResult.NotAZip
+        } catch (_: Exception) {
+            ImportResult.IoError
+        }
     }
 
     /** Drive 동기화용: 백업을 바이트 배열로 만든다. */

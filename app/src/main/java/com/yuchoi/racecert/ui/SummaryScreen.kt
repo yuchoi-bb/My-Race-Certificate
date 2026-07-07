@@ -142,12 +142,18 @@ fun SummaryScreen(bottomBar: @Composable () -> Unit) {
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val ok = BackupManager.import(context, uri)
-            Toast.makeText(
-                context,
-                if (ok) "백업을 복원했어요." else "복원에 실패했어요. 올바른 백업 파일인지 확인해 주세요.",
-                Toast.LENGTH_LONG,
-            ).show()
+            val msg = when (BackupManager.import(context, uri)) {
+                BackupManager.ImportResult.Success -> "백업을 복원했어요."
+                BackupManager.ImportResult.CantOpen ->
+                    "파일을 열 수 없어요. Google Drive라면 먼저 다운로드(오프라인 저장) 후 다시 시도해 주세요."
+                BackupManager.ImportResult.NotAZip ->
+                    "이 앱에서 만든 백업(.zip) 파일이 아니에요. race-backup-….zip 파일을 골라 주세요."
+                BackupManager.ImportResult.NoRecords ->
+                    "백업 안에 기록 데이터가 없어요. 다른 백업 파일인지 확인해 주세요."
+                BackupManager.ImportResult.IoError ->
+                    "복원 중 오류가 났어요. 다시 시도해 주세요."
+            }
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
         }
     }
 

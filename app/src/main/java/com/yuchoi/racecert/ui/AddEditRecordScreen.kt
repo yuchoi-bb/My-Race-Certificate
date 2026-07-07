@@ -146,6 +146,7 @@ fun AddEditRecordScreen(
     var date by remember { mutableStateOf(existing?.date ?: LocalDate.now()) }
     var memo by remember { mutableStateOf(existing?.memo ?: "") }
     var recordTime by remember { mutableStateOf(existing?.recordTime ?: "") }
+    var startTime by remember { mutableStateOf(existing?.startTime ?: "") }
     var distance by remember { mutableStateOf(existing?.distance ?: "") }
     var bib by remember { mutableStateOf(existing?.bib ?: "") }
     var entryFee by remember { mutableStateOf(existing?.entryFee ?: "") }
@@ -359,7 +360,12 @@ fun AddEditRecordScreen(
         placeCandidates = emptyList()
         scope.launch {
             weatherLoading = true
-            val result = WeatherService.weatherAt(place, date)
+            val result = WeatherService.weatherAt(
+                place,
+                date,
+                startTime = startTime.ifBlank { null },
+                recordTime = recordTime.ifBlank { null },
+            )
             weatherLoading = false
             when (result) {
                 is WeatherService.Result.Success -> weather = result.text
@@ -399,6 +405,7 @@ fun AddEditRecordScreen(
             eventFee = eventFee.trim(),
             eventNote = eventNote.trim(),
             bib = bib.trim(),
+            startTime = startTime.trim(),
         )
         RecordStore.upsert(record)
         com.yuchoi.racecert.sync.DriveSync.requestSync(context)
@@ -411,6 +418,7 @@ fun AddEditRecordScreen(
             bib.isNotBlank() || entryFee.isNotBlank() || eventFee.isNotBlank() ||
             eventNote.isNotBlank() || location.isNotBlank() || weather.isNotBlank() ||
             bodyInfo.isNotBlank() || memo.isNotBlank() || ocrText.isNotBlank() ||
+            startTime.isNotBlank() ||
             imagePaths.isNotEmpty() || dateManuallySet || typeManuallySet
     } else {
         title.trim() != existing.title || recordTime.trim() != existing.recordTime ||
@@ -420,7 +428,8 @@ fun AddEditRecordScreen(
             weather.trim() != existing.weather || bodyInfo.trim() != existing.bodyInfo ||
             memo.trim() != existing.memo || ocrText.trim() != existing.ocrText ||
             imagePaths.toList() != existing.imagePaths || type != existing.type ||
-            date != existing.date || bodyDate != existing.bodyDate
+            date != existing.date || bodyDate != existing.bodyDate ||
+            startTime.trim() != existing.startTime
     }
 
     fun attemptBack() {
@@ -626,6 +635,15 @@ fun AddEditRecordScreen(
                 value = recordTime,
                 onValueChange = { recordTime = it },
                 label = { Text("기록 (완주 시간, 예: 00:44:16 · 예정 대회는 비워두세요)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = startTime,
+                onValueChange = { startTime = it },
+                label = { Text("대회 시작 시간 (예: 08:00 · 날씨를 대회 시간대로 조회)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )

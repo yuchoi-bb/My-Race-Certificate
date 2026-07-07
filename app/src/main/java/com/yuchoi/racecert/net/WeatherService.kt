@@ -88,14 +88,40 @@ object WeatherService {
         out.values.take(8).toList()
     }
 
-    /** 선택한 좌표의 대회 날짜 날씨 */
-    suspend fun weatherAt(place: Place, date: LocalDate): Result = withContext(Dispatchers.IO) {
+    /**
+     * 선택한 좌표의 대회 날짜 날씨.
+     * startTime(HH:mm)과 recordTime(HH:mm:ss)이 있으면 대회 진행 시간대(시작~완주)의
+     * 시간별 날씨를 요약하고, 없으면 하루 전체 요약을 돌려준다.
+     */
+    suspend fun weatherAt(
+        place: Place,
+        date: LocalDate,
+        startTime: String? = null,
+        recordTime: String? = null,
+    ): Result = withContext(Dispatchers.IO) {
         try {
             val base = if (date.isBefore(LocalDate.now().minusDays(5))) {
                 "https://archive-api.open-meteo.com/v1/archive"
             } else {
                 "https://api.open-meteo.com/v1/forecast"
             }
+
+            val startHour = parseHour(startTime)
+            if (startHour != null) {
+                val duration = parseDurationHours(recordTime)
+                val endHour = (startHour + (duration ?: 1.0)).coerceAtMost(23.999)
+                val hourly = "temperature_2m,precipitation,weather_code,wind_speed_10m"
+                val json = JSONObject(
+                    httpGet(
+                        "$base?latitude=${place.lat}&longitude=${place.lon}" +
+                            "&start_date=$date&end_date=$date&hourly=$hourly&timezone=auto",
+                    ),
+                )
+                val raceText = summarizeRaceWindow(json, place, startHour, endHour)
+                if (raceText != null) return@withContext Result.Success(raceText)
+                // 시간별 실패 시 일 전체로 폴백
+            }
+
             val daily = "weather_code,temperature_2m_max,temperature_2m_min," +
                 "precipitation_sum,wind_speed_10m_max"
             val weatherJson = JSONObject(
@@ -128,6 +154,65 @@ object WeatherService {
             Result.NetworkError
         }
     }
+
+    /** 대회 진행 시간대(startHour~endHour)의 시간별 날씨 요약 */
+    private fun summarizeRaceWindow(
+        json: JSONObject,
+        place: Place,
+        startHour: Double,
+        endHour: Double,
+    ): String? {
+        val hourly = json.optJSONObject("hourly") ?: return null
+        val times = hourly.optJSONArray("time") ?: return null
+        val temps = hourly.optJSONArray("temperature_2m")
+        val precs = hourly.optJSONArray("precipitation")
+        val codes = hourly.optJSONArray("weather_code")
+        val winds = hourly.optJSONArray("wind_speed_10m")
+
+        val from = kotlin.math.floor(startHour).toInt()
+        val to = kotlin.math.ceil(endHour).toInt()
+        var tMin = Double.MAX_VALUE
+        var tMax = -Double.MAX_VALUE
+        var precSum = 0.0
+        var windMax = 0.0
+        var worstCode = 0
+        var count = 0
+        for (i in 0 until times.length()) {
+            val t = times.optString(i)                 // "yyyy-MM-ddTHH:mm"
+            val hour = t.substringAfter('T').substringBefore(':').toIntOrNull() ?: continue
+            if (hour < from || hour > to) continue
+            count++
+            temps?.optDouble(i)?.takeIf { !it.isNaN() }?.let { tMin = minOf(tMin, it); tMax = maxOf(tMax, it) }
+            precs?.optDouble(i)?.takeIf { !it.isNaN() }?.let { precSum += it }
+            winds?.optDouble(i)?.takeIf { !it.isNaN() }?.let { windMax = maxOf(windMax, it) }
+            codes?.optInt(i)?.let { if (it > worstCode) worstCode = it }
+        }
+        if (count == 0) return null
+        return buildString {
+            append("${place.name} · ${wmoDescription(worstCode)}")
+            if (tMin != Double.MAX_VALUE) append(", ${fmt(tMin)}~${fmt(tMax)}°C")
+            append(", 강수 ${fmt(precSum)}mm")
+            if (windMax > 0) append(", 바람 ${fmt(windMax)}km/h")
+            append(" (대회 ${twoDigit(from)}~${twoDigit(to)}시)")
+        }
+    }
+
+    /** "HH:mm" → 시(시작 시각의 정수 시간). 실패 시 null */
+    private fun parseHour(startTime: String?): Double? {
+        val m = Regex("""(\d{1,2}):(\d{2})""").find(startTime?.trim().orEmpty()) ?: return null
+        val h = m.groupValues[1].toInt()
+        val min = m.groupValues[2].toInt()
+        if (h !in 0..23 || min !in 0..59) return null
+        return h + min / 60.0
+    }
+
+    /** "HH:mm:ss" → 시간(소수). 실패 시 null */
+    private fun parseDurationHours(recordTime: String?): Double? {
+        val m = Regex("""(\d{1,2}):(\d{2}):(\d{2})""").find(recordTime?.trim().orEmpty()) ?: return null
+        return m.groupValues[1].toInt() + m.groupValues[2].toInt() / 60.0 + m.groupValues[3].toInt() / 3600.0
+    }
+
+    private fun twoDigit(h: Int): String = "%02d".format(h)
 
     private fun coordKey(lat: Double, lon: Double): String =
         "%.3f,%.3f".format(lat, lon)

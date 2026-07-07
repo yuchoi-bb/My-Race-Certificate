@@ -123,6 +123,14 @@ fun RecordDetailScreen(
                     }
                 }
             }
+            if (record.startTime.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "🕘 시작 ${record.startTime}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (record.location.isNotBlank() || record.weather.isNotBlank() ||
                 record.bodyInfo.isNotBlank() || record.entryFee.isNotBlank() ||
                 record.eventFee.isNotBlank() || record.bib.isNotBlank()

@@ -153,6 +153,7 @@ object RecordStore {
                         eventFee = obj.optString("eventFee"),
                         eventNote = obj.optString("eventNote"),
                         bib = obj.optString("bib"),
+                        startTime = obj.optString("startTime"),
                     )
                 )
             }
@@ -181,6 +182,7 @@ object RecordStore {
             obj.put("eventFee", record.eventFee)
             obj.put("eventNote", record.eventNote)
             obj.put("bib", record.bib)
+            obj.put("startTime", record.startTime)
             array.put(obj)
         }
         runCatching { dataFile.writeText(array.toString()) }

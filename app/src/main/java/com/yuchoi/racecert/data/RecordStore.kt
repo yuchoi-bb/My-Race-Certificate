@@ -133,6 +133,8 @@ object RecordStore {
                         bodyInfo = obj.optString("bodyInfo"),
                         bodyDateEpochDay = obj.optLong("bodyDateEpochDay"),
                         entryFee = obj.optString("entryFee"),
+                        eventFee = obj.optString("eventFee"),
+                        eventNote = obj.optString("eventNote"),
                     )
                 )
             }
@@ -158,6 +160,8 @@ object RecordStore {
             obj.put("bodyInfo", record.bodyInfo)
             obj.put("bodyDateEpochDay", record.bodyDateEpochDay)
             obj.put("entryFee", record.entryFee)
+            obj.put("eventFee", record.eventFee)
+            obj.put("eventNote", record.eventNote)
             array.put(obj)
         }
         runCatching { dataFile.writeText(array.toString()) }

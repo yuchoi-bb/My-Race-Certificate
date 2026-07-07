@@ -133,6 +133,8 @@ fun AddEditRecordScreen(
     var recordTime by remember { mutableStateOf(existing?.recordTime ?: "") }
     var distance by remember { mutableStateOf(existing?.distance ?: "") }
     var entryFee by remember { mutableStateOf(existing?.entryFee ?: "") }
+    var eventFee by remember { mutableStateOf(existing?.eventFee ?: "") }
+    var eventNote by remember { mutableStateOf(existing?.eventNote ?: "") }
     var ocrText by remember { mutableStateOf(existing?.ocrText ?: "") }
     var location by remember { mutableStateOf(existing?.location ?: "") }
     var weather by remember { mutableStateOf(existing?.weather ?: "") }
@@ -508,10 +510,41 @@ fun AddEditRecordScreen(
             OutlinedTextField(
                 value = entryFee,
                 onValueChange = { entryFee = it },
-                label = { Text("대회 참가비 (예: 30,000원)") },
+                label = { Text("기본 참가비 (실제 금액, 예: 40,000원)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = eventFee,
+                onValueChange = { eventFee = it },
+                label = { Text("이벤트 추가금 (증정품 등, 예: 300,000원)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = eventNote,
+                onValueChange = { eventNote = it },
+                label = { Text("이벤트 구성 / 증정품 (예: 러닝화, 대회복)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            // 기본 + 이벤트 추가금 총액 미리보기
+            run {
+                val base = entryFee.filter { it.isDigit() }.toLongOrNull() ?: 0L
+                val event = eventFee.filter { it.isDigit() }.toLongOrNull() ?: 0L
+                if (base + event > 0) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "총 참가비: ${"%,d".format(base + event)}원" +
+                            if (event > 0) " (기본 ${"%,d".format(base)} + 이벤트 ${"%,d".format(event)})" else "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
             Spacer(Modifier.height(12.dp))
 
             OutlinedTextField(
@@ -606,6 +639,8 @@ fun AddEditRecordScreen(
                         bodyInfo = bodyInfo.trim(),
                         bodyDateEpochDay = if (bodyInfo.isBlank()) 0 else (bodyDate?.toEpochDay() ?: 0),
                         entryFee = entryFee.trim(),
+                        eventFee = eventFee.trim(),
+                        eventNote = eventNote.trim(),
                     )
                     RecordStore.upsert(record)
                     com.yuchoi.racecert.sync.DriveSync.requestSync(context)

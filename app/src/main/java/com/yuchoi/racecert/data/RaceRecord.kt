@@ -31,8 +31,19 @@ data class RaceRecord(
     val bodyInfo: String = "",
     val bodyDateEpochDay: Long = 0,
     val entryFee: String = "",
+    val eventFee: String = "",
+    val eventNote: String = "",
 ) {
     val date: LocalDate get() = LocalDate.ofEpochDay(dateEpochDay)
+
+    /** 문자열에서 숫자만 뽑아 금액으로. (예: "30,000원" → 30000) */
+    private fun amountOf(s: String): Long = s.filter { it.isDigit() }.toLongOrNull() ?: 0L
+
+    val baseFeeAmount: Long get() = amountOf(entryFee)
+    val eventFeeAmount: Long get() = amountOf(eventFee)
+
+    /** 기본 참가비 + 이벤트 추가금 총액 */
+    val totalFeeAmount: Long get() = baseFeeAmount + eventFeeAmount
 
     /** 몸 상태를 잰 날짜 (미설정이면 null) */
     val bodyDate: LocalDate? get() = if (bodyDateEpochDay > 0) LocalDate.ofEpochDay(bodyDateEpochDay) else null

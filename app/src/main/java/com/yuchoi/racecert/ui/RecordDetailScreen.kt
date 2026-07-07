@@ -119,13 +119,30 @@ fun RecordDetailScreen(
                 }
             }
             if (record.location.isNotBlank() || record.weather.isNotBlank() ||
-                record.bodyInfo.isNotBlank() || record.entryFee.isNotBlank()
+                record.bodyInfo.isNotBlank() || record.entryFee.isNotBlank() ||
+                record.eventFee.isNotBlank()
             ) {
                 Spacer(Modifier.height(12.dp))
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        if (record.entryFee.isNotBlank()) {
-                            Text("💳 참가비 ${record.entryFee}", style = MaterialTheme.typography.bodyMedium)
+                        if (record.totalFeeAmount > 0) {
+                            val total = "%,d".format(record.totalFeeAmount)
+                            if (record.eventFeeAmount > 0) {
+                                Text(
+                                    "💳 총 참가비 ${total}원 " +
+                                        "(기본 ${"%,d".format(record.baseFeeAmount)} + 이벤트 ${"%,d".format(record.eventFeeAmount)})",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            } else {
+                                Text("💳 참가비 ${total}원", style = MaterialTheme.typography.bodyMedium)
+                            }
+                            if (record.eventNote.isNotBlank()) {
+                                Text(
+                                    "🎁 ${record.eventNote}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                             Spacer(Modifier.height(4.dp))
                         }
                         if (record.location.isNotBlank()) {

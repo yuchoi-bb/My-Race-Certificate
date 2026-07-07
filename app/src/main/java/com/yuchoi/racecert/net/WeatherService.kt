@@ -11,26 +11,86 @@ import java.net.URLEncoder
 import java.time.LocalDate
 
 /**
- * 대회 장소+날짜의 날씨를 가져온다.
- * - 지오코딩: 한국 지명/장소명에 강한 Nominatim(OSM)을 1순위, Open-Meteo를 보조로 사용
- * - 날씨: Open-Meteo (무료·API 키 불필요). 과거 날짜는 archive, 최근/미래는 forecast
- * 실패 원인을 구분해 돌려주므로 UI에서 정확히 안내할 수 있다.
+ * 대회 장소 후보 검색(지오코딩) + 좌표별 날씨 조회.
+ * - 지오코딩: Nominatim(OSM) + Open-Meteo. 도로/철도 등은 빼고 도시·행정지역을 우선.
+ *   여러 후보를 돌려주므로 사용자가 원하는 지역을 고를 수 있다.
+ * - 날씨: Open-Meteo (무료·키 불필요). 과거는 archive, 최근/미래는 forecast.
  */
 object WeatherService {
 
+    /** 선택 가능한 장소 후보 */
+    data class Place(
+        val name: String,        // 짧은 이름 (예: 용인시)
+        val displayName: String, // 전체 이름 (예: 용인시, 경기도, 대한민국)
+        val lat: Double,
+        val lon: Double,
+    )
+
     sealed interface Result {
         data class Success(val text: String) : Result
-        data object PlaceNotFound : Result
         data object NoWeatherData : Result
         data object NetworkError : Result
     }
 
-    private data class GeoPoint(val lat: Double, val lon: Double, val name: String)
+    /** 장소 이름 → 후보 목록(최대 8개). 도시·행정지역 우선, 도로/철도 등은 제외. */
+    suspend fun searchPlaces(query: String): List<Place> = withContext(Dispatchers.IO) {
+        val q = query.trim()
+        if (q.isEmpty()) return@withContext emptyList()
+        val out = LinkedHashMap<String, Place>()
 
-    suspend fun fetch(place: String, date: LocalDate): Result = withContext(Dispatchers.IO) {
+        // 1) Nominatim(OSM) — 한글 지명·장소명에 강함
+        runCatching {
+            val body = httpGet(
+                "https://nominatim.openstreetmap.org/search?q=" +
+                    URLEncoder.encode(q, "UTF-8") +
+                    "&format=jsonv2&limit=12&accept-language=ko",
+            )
+            val arr = JSONArray(body)
+            val items = (0 until arr.length()).map { arr.getJSONObject(it) }
+            // 도로/철도/수로/경로는 제외 (도시·행정경계·지명 우선)
+            val roadClasses = setOf("highway", "railway", "waterway", "route", "aeroway")
+            val filtered = items.filter { it.optString("class") !in roadClasses }
+            for (o in filtered.ifEmpty { items }) {
+                val lat = o.optString("lat").toDoubleOrNull() ?: continue
+                val lon = o.optString("lon").toDoubleOrNull() ?: continue
+                val name = o.optString("name").ifBlank {
+                    o.optString("display_name").substringBefore(',')
+                }
+                val disp = o.optString("display_name").ifBlank { name }
+                out.putIfAbsent(coordKey(lat, lon), Place(name, disp, lat, lon))
+            }
+        }
+
+        // 2) Open-Meteo 지오코딩 — 도시 위주라 보조 후보로 추가
+        runCatching {
+            val body = httpGet(
+                "https://geocoding-api.open-meteo.com/v1/search?name=" +
+                    URLEncoder.encode(q, "UTF-8") + "&count=5&language=ko&format=json",
+            )
+            val results = JSONObject(body).optJSONArray("results")
+            if (results != null) {
+                for (i in 0 until results.length()) {
+                    val r = results.getJSONObject(i)
+                    val lat = r.optDouble("latitude")
+                    val lon = r.optDouble("longitude")
+                    if (lat.isNaN() || lon.isNaN()) continue
+                    val name = r.optString("name")
+                    val admin = listOfNotNull(
+                        r.optString("admin1").ifBlank { null },
+                        r.optString("country").ifBlank { null },
+                    ).joinToString(", ")
+                    val disp = if (admin.isBlank()) name else "$name, $admin"
+                    out.putIfAbsent(coordKey(lat, lon), Place(name, disp, lat, lon))
+                }
+            }
+        }
+
+        out.values.take(8).toList()
+    }
+
+    /** 선택한 좌표의 대회 날짜 날씨 */
+    suspend fun weatherAt(place: Place, date: LocalDate): Result = withContext(Dispatchers.IO) {
         try {
-            val point = resolveLocation(place) ?: return@withContext Result.PlaceNotFound
-
             val base = if (date.isBefore(LocalDate.now().minusDays(5))) {
                 "https://archive-api.open-meteo.com/v1/archive"
             } else {
@@ -40,7 +100,7 @@ object WeatherService {
                 "precipitation_sum,wind_speed_10m_max"
             val weatherJson = JSONObject(
                 httpGet(
-                    "$base?latitude=${point.lat}&longitude=${point.lon}" +
+                    "$base?latitude=${place.lat}&longitude=${place.lon}" +
                         "&start_date=$date&end_date=$date&daily=$daily&timezone=auto",
                 ),
             )
@@ -49,7 +109,6 @@ object WeatherService {
             if (codes == null || codes.length() == 0 || codes.isNull(0)) {
                 return@withContext Result.NoWeatherData
             }
-
             val desc = wmoDescription(codes.optInt(0))
             val tMax = d.optJSONArray("temperature_2m_max")?.optDouble(0)
             val tMin = d.optJSONArray("temperature_2m_min")?.optDouble(0)
@@ -57,7 +116,7 @@ object WeatherService {
             val wind = d.optJSONArray("wind_speed_10m_max")?.optDouble(0)
 
             val text = buildString {
-                append("${point.name} · $desc")
+                append("${place.name} · $desc")
                 if (tMin != null && !tMin.isNaN() && tMax != null && !tMax.isNaN()) {
                     append(", ${fmt(tMin)}~${fmt(tMax)}°C")
                 }
@@ -70,71 +129,8 @@ object WeatherService {
         }
     }
 
-    /** 장소 이름 → 좌표. Nominatim(OSM) 우선, 실패 시 Open-Meteo 지오코딩. */
-    private fun resolveLocation(place: String): GeoPoint? {
-        val query = place.trim()
-        if (query.isEmpty()) return null
-
-        // 1) Nominatim: 한글 지명·경기장/운동장 같은 장소명도 잘 찾음
-        runCatching {
-            val body = httpGet(
-                "https://nominatim.openstreetmap.org/search?q=" +
-                    URLEncoder.encode(query, "UTF-8") +
-                    "&format=jsonv2&limit=1&accept-language=ko",
-            )
-            val arr = JSONArray(body)
-            if (arr.length() > 0) {
-                val o = arr.getJSONObject(0)
-                val lat = o.optString("lat").toDoubleOrNull()
-                val lon = o.optString("lon").toDoubleOrNull()
-                if (lat != null && lon != null) {
-                    val name = o.optString("name").ifBlank {
-                        o.optString("display_name").substringBefore(',').ifBlank { query }
-                    }
-                    return GeoPoint(lat, lon, name)
-                }
-            }
-        }
-
-        // 2) Open-Meteo 지오코딩 (접미사 제거 후보 포함)
-        val candidates = buildList {
-            add(query)
-            val stripped = query.replace(
-                Regex("(특례시|광역시|특별자치시|특별시|시|군|구|읍|면|동|종합운동장|경기장|스타디움|월드컵경기장)$"),
-                "",
-            ).trim()
-            if (stripped.isNotEmpty() && stripped != query) add(stripped)
-            val firstWord = query.substringBefore(' ').trim()
-            if (firstWord.isNotEmpty()) add(firstWord)
-        }.distinct().filter { it.isNotEmpty() }
-
-        for (name in candidates) {
-            val geo = runCatching {
-                JSONObject(
-                    httpGet(
-                        "https://geocoding-api.open-meteo.com/v1/search?name=" +
-                            URLEncoder.encode(name, "UTF-8") + "&count=10&language=ko&format=json",
-                    ),
-                )
-            }.getOrNull() ?: continue
-            val results = geo.optJSONArray("results") ?: continue
-            if (results.length() == 0) continue
-            var chosen = results.getJSONObject(0)
-            for (i in 0 until results.length()) {
-                val r = results.getJSONObject(i)
-                if (r.optString("country_code") == "KR") {
-                    chosen = r
-                    break
-                }
-            }
-            return GeoPoint(
-                lat = chosen.optDouble("latitude"),
-                lon = chosen.optDouble("longitude"),
-                name = chosen.optString("name", name),
-            )
-        }
-        return null
-    }
+    private fun coordKey(lat: Double, lon: Double): String =
+        "%.3f,%.3f".format(lat, lon)
 
     private fun fmt(v: Double): String =
         if (v == v.toLong().toDouble()) v.toLong().toString() else "%.1f".format(v)
@@ -154,13 +150,11 @@ object WeatherService {
         else -> "날씨 정보"
     }
 
-    /** HTTP GET → 응답 본문 문자열. 비정상 응답/네트워크 실패는 예외로 던진다. */
     private fun httpGet(url: String): String {
         val connection = URL(url).openConnection() as HttpURLConnection
         try {
             connection.connectTimeout = 12_000
             connection.readTimeout = 12_000
-            // Nominatim 이용약관: 앱을 식별하는 User-Agent 필수
             connection.setRequestProperty("User-Agent", "MyRaceCertificate-Android (race cert app)")
             connection.instanceFollowRedirects = true
             val code = connection.responseCode

@@ -229,24 +229,40 @@ fun AddEditRecordScreen(
     var showPhotoSourceDialog by remember { mutableStateOf(false) }
     // 탭한 썸네일을 크게 보는 미리보기
     var previewPath by remember { mutableStateOf<String?>(null) }
+    // 날씨용 장소 후보 (선택 다이얼로그)
+    var placeCandidates by remember { mutableStateOf<List<WeatherService.Place>>(emptyList()) }
 
-    // 대회 장소 + 날짜로 당일 날씨 자동 기입 (Open-Meteo, 과거 날짜 지원)
-    fun fetchWeather() {
+    // 장소 후보를 찾아 선택 다이얼로그를 띄운다
+    fun searchPlaces() {
         if (location.isBlank()) {
-            Toast.makeText(context, "먼저 대회 장소를 입력해 주세요. (예: 수원)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "먼저 대회 장소를 입력해 주세요. (예: 용인, 수원)", Toast.LENGTH_SHORT).show()
             return
         }
         scope.launch {
             weatherLoading = true
-            val result = WeatherService.fetch(location.trim(), date)
+            val places = WeatherService.searchPlaces(location.trim())
+            weatherLoading = false
+            if (places.isEmpty()) {
+                Toast.makeText(
+                    context,
+                    "장소 '${location.trim()}'를 찾지 못했어요. 도시/지역명으로 입력해 주세요. (예: 용인, 수원)",
+                    Toast.LENGTH_LONG,
+                ).show()
+            } else {
+                placeCandidates = places
+            }
+        }
+    }
+
+    // 선택한 장소의 대회 날짜 날씨를 기입
+    fun applyWeatherFor(place: WeatherService.Place) {
+        placeCandidates = emptyList()
+        scope.launch {
+            weatherLoading = true
+            val result = WeatherService.weatherAt(place, date)
             weatherLoading = false
             when (result) {
                 is WeatherService.Result.Success -> weather = result.text
-                WeatherService.Result.PlaceNotFound -> Toast.makeText(
-                    context,
-                    "장소 '${location.trim()}'를 찾지 못했어요. 도시/지역명으로 입력해 주세요. (예: 수원, 서울, 울릉)",
-                    Toast.LENGTH_LONG,
-                ).show()
                 WeatherService.Result.NoWeatherData -> Toast.makeText(
                     context,
                     "그 날짜의 날씨 데이터가 없어요. 미래 대회는 16일 이내 예보만 가능해요.",
@@ -402,16 +418,16 @@ fun AddEditRecordScreen(
             )
             Spacer(Modifier.height(8.dp))
             OutlinedButton(
-                onClick = { fetchWeather() },
+                onClick = { searchPlaces() },
                 enabled = !weatherLoading,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 if (weatherLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
-                    Text("날씨 조회 중…")
+                    Text("조회 중…")
                 } else {
-                    Text("☀️ 대회 당일 날씨 가져오기")
+                    Text("☀️ 장소 선택 후 날씨 가져오기")
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -518,6 +534,42 @@ fun AddEditRecordScreen(
                 }
             }
         }
+    }
+
+    if (placeCandidates.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { placeCandidates = emptyList() },
+            title = { Text("어느 지역인가요?") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                ) {
+                    placeCandidates.forEach { place ->
+                        TextButton(
+                            onClick = { applyWeatherFor(place) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    place.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                                Text(
+                                    place.displayName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { placeCandidates = emptyList() }) { Text("취소") }
+            },
+        )
     }
 
     if (showPhotoSourceDialog) {

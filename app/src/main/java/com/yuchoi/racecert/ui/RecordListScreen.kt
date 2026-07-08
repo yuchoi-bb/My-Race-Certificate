@@ -86,6 +86,19 @@ private fun cardColor(record: RaceRecord): Color {
     }
 }
 
+/**
+ * 카드에 표기할 날씨 문자열을 줄바꿈해 정리한다.
+ * 저장 형식: "장소 · ☁️ 7~24°C  💧0mm  💨15km/h  🕘07~11시"
+ * 표기 형식(아이콘 유지):
+ *   ☁️ 7~24°C
+ *   💧 0mm
+ *   💨 15km/h
+ *   🕘 07~11시
+ */
+private fun weatherCardText(weather: String): String =
+    weather.substringAfter("· ", weather).trim()
+        .replace(Regex("""\s+(?=💧|💨|🕘)"""), "\n")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecordListScreen(
@@ -430,19 +443,19 @@ private fun RecordCard(record: RaceRecord, onClick: () -> Unit, highlighted: Boo
                 }
             }
             }
-            // 날씨: 카드 우측 상단
+            // 날씨: 카드 우측 상단 (날씨/기온 · 강수 · 바람을 줄바꿈해 표기)
             if (record.weather.isNotBlank()) {
                 Text(
-                    text = record.weather.substringAfter("· ", record.weather),
+                    text = weatherCardText(record.weather),
                     style = MaterialTheme.typography.labelSmall,
-                    maxLines = 2,
+                    maxLines = 4,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.End,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
-                        .widthIn(max = 120.dp),
+                        .widthIn(max = 140.dp),
                 )
             }
         }

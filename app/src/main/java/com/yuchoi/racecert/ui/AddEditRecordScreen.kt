@@ -231,7 +231,7 @@ fun AddEditRecordScreen(
         )
     }
 
-    // 포토 피커/다른 앱 어느 쪽에서 골라도 동일하게 처리: 복사 → 10장 제한 → 전체 OCR
+    // 포토 피커/다른 앱 어느 쪽에서 골라도 동일하게 처리: 복사 → 장수 제한 → 전체 OCR
     fun handlePickedUris(uris: List<Uri>) {
         if (uris.isEmpty()) return
         val remaining = RaceRecord.MAX_IMAGES - imagePaths.size

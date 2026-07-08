@@ -65,7 +65,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
-private val dateFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
+private val dateFormatter = DateTimeFormatter.ofPattern("yy.MM.dd")
 
 // 카드 배경 파스텔 팔레트
 private val PastelRed = Color(0xFFFFCDD2) // 마라톤 풀코스

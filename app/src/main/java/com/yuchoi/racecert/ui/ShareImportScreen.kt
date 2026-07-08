@@ -53,7 +53,7 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-private val shareDateFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
+private val shareDateFormatter = DateTimeFormatter.ofPattern("yy.MM.dd")
 
 /** 갤러리에서 공유(Share)로 받은 사진을 특정 대회 기록에 붙이는 화면. */
 @OptIn(ExperimentalMaterial3Api::class)

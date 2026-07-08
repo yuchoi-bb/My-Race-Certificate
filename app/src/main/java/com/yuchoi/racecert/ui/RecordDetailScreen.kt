@@ -49,7 +49,7 @@ import androidx.compose.foundation.Image as ForegroundImage
 import com.yuchoi.racecert.data.RecordStore
 import java.time.format.DateTimeFormatter
 
-private val detailFormatter = DateTimeFormatter.ofPattern("yyyy년 M월 d일 (E)")
+private val detailFormatter = DateTimeFormatter.ofPattern("yy년 M월 d일 (E)")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

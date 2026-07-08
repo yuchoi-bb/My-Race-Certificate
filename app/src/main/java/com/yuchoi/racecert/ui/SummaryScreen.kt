@@ -48,7 +48,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-private val pbDateFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
+private val pbDateFormatter = DateTimeFormatter.ofPattern("yy.MM.dd")
 
 private val categoryOrder = listOf("10K", "하프", "풀코스", "기타", "거리 미입력")
 

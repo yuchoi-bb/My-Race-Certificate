@@ -135,19 +135,18 @@ object WeatherService {
             if (codes == null || codes.length() == 0 || codes.isNull(0)) {
                 return@withContext Result.NoWeatherData
             }
-            val desc = wmoDescription(codes.optInt(0))
             val tMax = d.optJSONArray("temperature_2m_max")?.optDouble(0)
             val tMin = d.optJSONArray("temperature_2m_min")?.optDouble(0)
             val rain = d.optJSONArray("precipitation_sum")?.optDouble(0)
             val wind = d.optJSONArray("wind_speed_10m_max")?.optDouble(0)
 
             val text = buildString {
-                append("${place.name} · $desc")
+                append("${place.name} · ${wmoEmoji(codes.optInt(0))}")
                 if (tMin != null && !tMin.isNaN() && tMax != null && !tMax.isNaN()) {
-                    append(", ${fmt(tMin)}~${fmt(tMax)}°C")
+                    append(" ${fmt(tMin)}~${fmt(tMax)}°C")
                 }
-                if (rain != null && !rain.isNaN()) append(", 강수 ${fmt(rain)}mm")
-                if (wind != null && !wind.isNaN()) append(", 바람 ${fmt(wind)}km/h")
+                if (rain != null && !rain.isNaN()) append("  💧${fmt(rain)}mm")
+                if (wind != null && !wind.isNaN()) append("  💨${fmt(wind)}km/h")
             }
             Result.Success(text)
         } catch (_: Exception) {
@@ -189,11 +188,11 @@ object WeatherService {
         }
         if (count == 0) return null
         return buildString {
-            append("${place.name} · ${wmoDescription(worstCode)}")
-            if (tMin != Double.MAX_VALUE) append(", ${fmt(tMin)}~${fmt(tMax)}°C")
-            append(", 강수 ${fmt(precSum)}mm")
-            if (windMax > 0) append(", 바람 ${fmt(windMax)}km/h")
-            append(" (대회 ${twoDigit(from)}~${twoDigit(to)}시)")
+            append("${place.name} · ${wmoEmoji(worstCode)}")
+            if (tMin != Double.MAX_VALUE) append(" ${fmt(tMin)}~${fmt(tMax)}°C")
+            append("  💧${fmt(precSum)}mm")
+            if (windMax > 0) append("  💨${fmt(windMax)}km/h")
+            append("  🕘${twoDigit(from)}~${twoDigit(to)}시")
         }
     }
 
@@ -220,19 +219,19 @@ object WeatherService {
     private fun fmt(v: Double): String =
         if (v == v.toLong().toDouble()) v.toLong().toString() else "%.1f".format(v)
 
-    private fun wmoDescription(code: Int): String = when (code) {
-        0 -> "맑음"
-        1 -> "대체로 맑음"
-        2 -> "구름 조금"
-        3 -> "흐림"
-        45, 48 -> "안개"
-        in 51..57 -> "이슬비"
-        in 61..67 -> "비"
-        in 71..77 -> "눈"
-        in 80..82 -> "소나기"
-        85, 86 -> "소낙눈"
-        in 95..99 -> "뇌우"
-        else -> "날씨 정보"
+    private fun wmoEmoji(code: Int): String = when (code) {
+        0 -> "☀️"
+        1 -> "🌤️"
+        2 -> "⛅"
+        3 -> "☁️"
+        45, 48 -> "🌫️"
+        in 51..57 -> "🌦️"
+        in 61..67 -> "🌧️"
+        in 71..77 -> "❄️"
+        in 80..82 -> "🌦️"
+        85, 86 -> "🌨️"
+        in 95..99 -> "⛈️"
+        else -> "🌡️"
     }
 
     private fun httpGet(url: String): String {

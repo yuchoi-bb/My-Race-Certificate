@@ -95,7 +95,11 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-private val formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
+private val formatter = DateTimeFormatter.ofPattern("yy.MM.dd")
+
+/** 대회 이름에서 4자리 연도(19xx/20xx)를 모두 제거하고 공백을 정리한다. */
+private fun stripYears(s: String): String =
+    s.replace(Regex("""\b(19|20)\d{2}\b"""), " ").replace(Regex("""\s+"""), " ").trim()
 
 /**
  * ACTION_GET_CONTENT를 앱 선택창(chooser)으로 감싸서 실행한다.
@@ -146,7 +150,9 @@ fun AddEditRecordScreen(
     var date by remember { mutableStateOf(existing?.date ?: LocalDate.now()) }
     var memo by remember { mutableStateOf(existing?.memo ?: "") }
     var recordTime by remember { mutableStateOf(existing?.recordTime ?: "") }
-    var startTime by remember { mutableStateOf(existing?.startTime ?: "") }
+    // 신규 기록의 시작 시간 기본값 08:00 (서울이면 07:30로 자동 조정)
+    var startTime by remember { mutableStateOf(existing?.startTime ?: "08:00") }
+    var startTimeManuallySet by remember { mutableStateOf(existing != null) }
     var distance by remember { mutableStateOf(existing?.distance ?: "") }
     var bib by remember { mutableStateOf(existing?.bib ?: "") }
     var entryFee by remember { mutableStateOf(existing?.entryFee ?: "") }
@@ -197,7 +203,7 @@ fun AddEditRecordScreen(
         }
         val parsed = CertificateParser.parse(combined.toString())
         // 빈 칸만 채우고, 날짜·종목은 사용자가 안 만졌을 때만 반영
-        if (title.isBlank()) parsed.title?.let { title = it }
+        if (title.isBlank()) parsed.title?.let { title = stripYears(it) }
         if (recordTime.isBlank()) parsed.recordTime?.let { recordTime = it }
         if (distance.isBlank()) parsed.distance?.let { distance = it }
         if (bib.isBlank()) parsed.bib?.let { bib = it }
@@ -301,6 +307,13 @@ fun AddEditRecordScreen(
     val devicePhotos = remember { mutableStateListOf<Uri>() }
     val selectedDevice = remember { mutableStateListOf<Uri>() }
 
+    // 장소가 서울이면 시작 시간을 07:30로, 그 외엔 08:00로 자동 조정 (사용자가 직접 바꾸기 전까지)
+    androidx.compose.runtime.LaunchedEffect(location) {
+        if (!startTimeManuallySet) {
+            startTime = if (location.contains("서울")) "07:30" else "08:00"
+        }
+    }
+
     fun loadDevicePhotos() {
         scope.launch {
             deviceLoading = true
@@ -388,7 +401,7 @@ fun AddEditRecordScreen(
     fun doSave() {
         val record = RaceRecord(
             id = existing?.id ?: RecordStore.newId(),
-            title = title.trim(),
+            title = stripYears(title.trim()),
             type = type,
             dateEpochDay = date.toEpochDay(),
             imagePaths = imagePaths.toList(),
@@ -418,7 +431,7 @@ fun AddEditRecordScreen(
             bib.isNotBlank() || entryFee.isNotBlank() || eventFee.isNotBlank() ||
             eventNote.isNotBlank() || location.isNotBlank() || weather.isNotBlank() ||
             bodyInfo.isNotBlank() || memo.isNotBlank() || ocrText.isNotBlank() ||
-            startTime.isNotBlank() ||
+            startTimeManuallySet ||
             imagePaths.isNotEmpty() || dateManuallySet || typeManuallySet
     } else {
         title.trim() != existing.title || recordTime.trim() != existing.recordTime ||
@@ -642,8 +655,8 @@ fun AddEditRecordScreen(
 
             OutlinedTextField(
                 value = startTime,
-                onValueChange = { startTime = it },
-                label = { Text("대회 시작 시간 (예: 08:00 · 날씨를 대회 시간대로 조회)") },
+                onValueChange = { startTime = it; startTimeManuallySet = true },
+                label = { Text("대회 시작 시간 (기본 08:00 · 서울이면 07:30)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )

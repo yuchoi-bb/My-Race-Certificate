@@ -63,4 +63,6 @@ dependencies {
     implementation("com.google.mlkit:text-recognition-korean:16.0.1")
     // Google 로그인 (Drive 자동 동기화용 계정/토큰)
     implementation("com.google.android.gms:play-services-auth:21.2.0")
+    // 헬스커넥트: 삼성헬스/가민커넥트가 넣어둔 몸무게·체지방 읽기
+    implementation("androidx.health.connect:connect-client:1.1.0-rc03")
 }

@@ -346,6 +346,70 @@ fun AddEditRecordScreen(
         }
     }
 
+    // ── 헬스커넥트에서 몸 상태(몸무게·체지방) 가져오기 ──
+    // 어디서 막히는지 알 수 있게 단계마다 화면에 숫자 코드를 띄운다.
+    var bodyFetching by remember { mutableStateOf(false) }
+
+    fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+
+    fun applyReading(r: com.yuchoi.racecert.health.HealthConnectBody.BodyReading) {
+        val parts = mutableListOf<String>()
+        r.weightKg?.let { parts += "%.1fkg".format(it) }
+        r.bodyFatPct?.let { parts += "체지방 %.1f%%".format(it) }
+        bodyInfo = parts.joinToString(", ")
+        r.date?.let { bodyDate = it }
+        toast("코드 6: 가져왔어요 → $bodyInfo" + (r.date?.let { " (측정일 ${it.format(formatter)})" } ?: ""))
+    }
+
+    fun readAndFill() {
+        scope.launch {
+            bodyFetching = true
+            try {
+                val r = com.yuchoi.racecert.health.HealthConnectBody.readNear(context, date)
+                bodyFetching = false
+                if (r.isEmpty) {
+                    toast("코드 5: 대회일 ±14일 범위에 몸무게/체지방 데이터가 없어요. (삼성헬스·가민커넥트가 헬스커넥트로 동기화했는지 확인)")
+                } else {
+                    applyReading(r)
+                }
+            } catch (e: Exception) {
+                bodyFetching = false
+                toast("코드 9: 읽기 오류 — ${e.message}")
+            }
+        }
+    }
+
+    val hcPermLauncher = rememberLauncherForActivityResult(
+        androidx.health.connect.client.PermissionController.createRequestPermissionResultContract()
+    ) { granted ->
+        if (granted.containsAll(com.yuchoi.racecert.health.HealthConnectBody.PERMISSIONS)) {
+            toast("코드 3: 권한 허용됨 — 읽는 중")
+            readAndFill()
+        } else {
+            toast("코드 4: 권한이 거부됐어요. 헬스커넥트에서 '몸무게·체지방 읽기'를 허용해 주세요.")
+        }
+    }
+
+    fun fetchBodyFromHealth() {
+        when (com.yuchoi.racecert.health.HealthConnectBody.availability(context)) {
+            1 -> toast("코드 1: 이 기기는 헬스커넥트를 지원하지 않아요.")
+            2 -> toast("코드 2: 헬스커넥트 앱 설치/업데이트가 필요해요. (Play 스토어에서 'Health Connect')")
+            else -> scope.launch {
+                val granted = try {
+                    com.yuchoi.racecert.health.HealthConnectBody.hasPermissions(context)
+                } catch (e: Exception) {
+                    toast("코드 8: 권한 확인 오류 — ${e.message}")
+                    return@launch
+                }
+                if (granted) {
+                    readAndFill()
+                } else {
+                    hcPermLauncher.launch(com.yuchoi.racecert.health.HealthConnectBody.PERMISSIONS)
+                }
+            }
+        }
+    }
+
     // 장소 후보를 찾아 선택 다이얼로그를 띄운다
     fun searchPlaces() {
         if (location.isBlank()) {
@@ -758,6 +822,20 @@ fun AddEditRecordScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { fetchBodyFromHealth() },
+                enabled = !bodyFetching,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (bodyFetching) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Filled.AutoAwesome, contentDescription = null)
+                }
+                Spacer(Modifier.width(8.dp))
+                Text("헬스커넥트에서 몸 상태 가져오기 (삼성헬스·가민)")
+            }
             Spacer(Modifier.height(8.dp))
             OutlinedButton(
                 onClick = { showBodyDatePicker = true },

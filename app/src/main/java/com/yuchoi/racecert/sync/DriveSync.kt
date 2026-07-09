@@ -148,6 +148,11 @@ object DriveSync {
             conn.connectTimeout = 20_000
             conn.readTimeout = 30_000
             conn.outputStream.use { it.write(body) }
+            // 토큰 만료(401)·권한/할당량(403) 등은 실패로 확실히 처리 (조용한 성공 방지)
+            if (conn.responseCode !in 200..299) {
+                conn.errorStream?.use { it.readBytes() }
+                throw java.io.IOException("Drive upload failed: HTTP ${conn.responseCode}")
+            }
             conn.inputStream.use { it.readBytes() }
         } finally {
             conn.disconnect()

@@ -78,6 +78,12 @@ object BackupManager {
     }
 
     private fun writeZip(context: Context, os: OutputStream) {
+        // 어떤 기록도 참조하지 않는 고아 이미지(삭제·회전으로 버려진 파일)는 백업에서 제외해
+        // 백업 zip과 Drive 동기화 용량이 계속 불어나지 않게 한다.
+        val referenced = RecordStore.records
+            .flatMap { it.imagePaths }
+            .map { File(it).name }
+            .toHashSet()
         ZipOutputStream(os).use { zip ->
             val json = dataFile(context)
             if (json.exists()) {
@@ -86,6 +92,7 @@ object BackupManager {
                 zip.closeEntry()
             }
             imagesDir(context).listFiles()?.forEach { f ->
+                if (f.name !in referenced) return@forEach
                 zip.putNextEntry(ZipEntry("images/${f.name}"))
                 f.inputStream().use { it.copyTo(zip) }
                 zip.closeEntry()
@@ -95,6 +102,7 @@ object BackupManager {
 
     private fun readZip(context: Context, input: InputStream): Boolean {
         val images = imagesDir(context)
+        val imagesRoot = images.canonicalPath + File.separator
         var foundJson = false
         ZipInputStream(input).use { zip ->
             var entry: ZipEntry? = zip.nextEntry
@@ -106,9 +114,11 @@ object BackupManager {
                         foundJson = true
                     }
                     name.startsWith("images/") && !entry.isDirectory -> {
-                        val fn = name.substringAfter("images/")
-                        if (fn.isNotBlank()) {
-                            File(images, fn).outputStream().use { zip.copyTo(it) }
+                        // 파일명만 취하고, 최종 경로가 images 폴더 안인지 확인 (Zip Slip 방어)
+                        val fn = File(name.substringAfter("images/")).name
+                        val dest = File(images, fn)
+                        if (fn.isNotBlank() && dest.canonicalPath.startsWith(imagesRoot)) {
+                            dest.outputStream().use { zip.copyTo(it) }
                         }
                     }
                 }

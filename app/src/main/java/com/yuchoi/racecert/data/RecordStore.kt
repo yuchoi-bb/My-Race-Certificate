@@ -44,6 +44,18 @@ object RecordStore {
         if (::appContext.isInitialized) return
         appContext = context.applicationContext
         load()
+        // 앱 시작 시(진행 중인 편집 없음) 어떤 기록도 참조하지 않는 고아 이미지 정리
+        pruneOrphanImages()
+    }
+
+    /** 어떤 기록도 참조하지 않는 이미지 파일을 삭제해 저장공간을 회수한다. */
+    private fun pruneOrphanImages() {
+        runCatching {
+            val referenced = records.flatMap { it.imagePaths }.map { File(it).name }.toHashSet()
+            imagesDir.listFiles()?.forEach { f ->
+                if (f.name !in referenced) f.delete()
+            }
+        }
     }
 
     /** 백업 복원 후 디스크에서 다시 읽어 목록을 갱신한다. */
@@ -95,13 +107,17 @@ object RecordStore {
         val dest = File(imagesDir, "${UUID.randomUUID()}.jpg")
         runCatching {
             val conn = URL(url).openConnection() as HttpURLConnection
-            conn.setRequestProperty(
-                "User-Agent",
-                "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36",
-            )
-            conn.connectTimeout = 15_000
-            conn.readTimeout = 15_000
-            conn.inputStream.use { input -> dest.outputStream().use { input.copyTo(it) } }
+            try {
+                conn.setRequestProperty(
+                    "User-Agent",
+                    "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36",
+                )
+                conn.connectTimeout = 15_000
+                conn.readTimeout = 15_000
+                conn.inputStream.use { input -> dest.outputStream().use { input.copyTo(it) } }
+            } finally {
+                conn.disconnect()
+            }
         }
         if (dest.exists() && dest.length() > 0) dest.absolutePath else null
     }

@@ -77,7 +77,11 @@ fun rememberUrlBitmap(url: String, reqSizePx: Int = 512): ImageBitmap? {
                 )
                 conn.connectTimeout = 12_000
                 conn.readTimeout = 12_000
-                val bytes = conn.inputStream.use { it.readBytes() }
+                val bytes = try {
+                    conn.inputStream.use { it.readBytes() }
+                } finally {
+                    conn.disconnect()
+                }
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
                 var sample = 1

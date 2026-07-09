@@ -54,7 +54,9 @@ object ImageSearchService {
             "https://duckduckgo.com/?q=" + URLEncoder.encode(query, "UTF-8") + "&iax=images&ia=images",
             referer = "https://duckduckgo.com/",
         )
-        return Regex("""vqd=["']?([\d-]+)["']?""").find(html)?.groupValues?.get(1)
+        // vqd 토큰 형식이 자주 바뀌므로(숫자-대시 또는 영숫자) 두 패턴을 순차 시도한다.
+        return Regex("""vqd=["']([\w-]+)["']""").find(html)?.groupValues?.get(1)
+            ?: Regex("""vqd=([\d-]+)&""").find(html)?.groupValues?.get(1)
     }
 
     private fun httpGet(url: String, referer: String? = null): String {

@@ -59,6 +59,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -186,22 +187,31 @@ fun AddEditRecordScreen(
     var webSearchLoading by remember { mutableStateOf(false) }
     var showWebImageDialog by remember { mutableStateOf(false) }
 
-    // 첨부된 모든 사진을 OCR로 읽어 빈 칸을 초안으로 채운다. 사용자는 이후 자유롭게 수정 가능.
-    suspend fun runOcrOnAllImages() {
+    /**
+     * 사진을 OCR로 읽어 빈 칸을 초안으로 채운다. 사용자는 이후 자유롭게 수정 가능.
+     * - rebuild=true: 첨부된 전체 사진을 다시 읽는다(수동 '다시 읽기').
+     * - rebuild=false: [imagesToRead](새로 추가된 사진)만 읽어 기존 OCR 원문에 덧붙인다.
+     */
+    suspend fun ocrAndFill(imagesToRead: List<String>, rebuild: Boolean) {
         if (imagePaths.isEmpty()) {
             Toast.makeText(context, "먼저 기록증 사진을 추가해 주세요.", Toast.LENGTH_SHORT).show()
             return
         }
         ocrRunning = true
-        val combined = StringBuilder()
-        for (path in imagePaths) {
+        val fresh = StringBuilder()
+        for (path in imagesToRead) {
             val text = OcrEngine.recognize(context, path)
             if (text.isNotBlank()) {
-                if (combined.isNotEmpty()) combined.append("\n---\n")
-                combined.append(text)
+                if (fresh.isNotEmpty()) fresh.append("\n---\n")
+                fresh.append(text)
             }
         }
-        val parsed = CertificateParser.parse(combined.toString())
+        val combined = if (rebuild) {
+            fresh.toString()
+        } else {
+            listOf(ocrText, fresh.toString()).filter { it.isNotBlank() }.joinToString("\n---\n")
+        }
+        val parsed = CertificateParser.parse(combined)
         // 빈 칸만 채우고, 날짜·종목은 사용자가 안 만졌을 때만 반영
         if (title.isBlank()) parsed.title?.let { title = stripYears(it) }
         if (recordTime.isBlank()) parsed.recordTime?.let { recordTime = it }
@@ -209,7 +219,7 @@ fun AddEditRecordScreen(
         if (bib.isBlank()) parsed.bib?.let { bib = it }
         if (!dateManuallySet) parsed.date?.let { date = it }
         if (!typeManuallySet) parsed.type?.let { type = it }
-        ocrText = combined.toString()
+        ocrText = combined
         ocrRunning = false
 
         // 필수 항목 인식 결과 정리: 채워진 값은 보여주고, 비어 있으면 직접 입력 안내
@@ -250,8 +260,8 @@ fun AddEditRecordScreen(
                     Toast.LENGTH_SHORT,
                 ).show()
             }
-            // 사진을 추가하면 첨부된 전체 사진을 자동으로 OCR
-            runOcrOnAllImages()
+            // 새로 추가한 사진만 OCR해서 기존 인식 원문에 덧붙인다 (전체 재인식 방지)
+            ocrAndFill(newPaths, rebuild = false)
         }
     }
 
@@ -463,6 +473,10 @@ fun AddEditRecordScreen(
     var showDiscardDialog by remember { mutableStateOf(false) }
 
     fun doSave() {
+        if (title.isBlank()) {
+            Toast.makeText(context, "대회 이름을 입력해 주세요.", Toast.LENGTH_SHORT).show()
+            return
+        }
         val record = RaceRecord(
             id = existing?.id ?: RecordStore.newId(),
             title = stripYears(title.trim()),
@@ -553,7 +567,7 @@ fun AddEditRecordScreen(
                     readOnly = true,
                     label = { Text("종목") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                 )
                 ExposedDropdownMenu(
                     expanded = typeExpanded,
@@ -692,7 +706,7 @@ fun AddEditRecordScreen(
 
             // 첨부된 사진 전체를 OCR로 다시 읽기 (사진 추가 시 자동 실행되지만 수동 재실행도 지원)
             OutlinedButton(
-                onClick = { scope.launch { runOcrOnAllImages() } },
+                onClick = { scope.launch { ocrAndFill(imagePaths.toList(), rebuild = true) } },
                 enabled = !ocrRunning && imagePaths.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth(),
             ) {

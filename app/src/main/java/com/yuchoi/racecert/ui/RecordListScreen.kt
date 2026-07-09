@@ -360,7 +360,7 @@ private fun UpcomingCard(
 }
 
 @Composable
-private fun RecordCard(record: RaceRecord, onClick: () -> Unit, highlighted: Boolean = false) {
+internal fun RecordCard(record: RaceRecord, onClick: () -> Unit, highlighted: Boolean = false) {
     Card(
         modifier = Modifier.fillMaxWidth()
             .then(if (highlighted) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)) else Modifier)

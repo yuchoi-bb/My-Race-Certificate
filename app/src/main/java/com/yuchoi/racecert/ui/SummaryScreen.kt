@@ -16,7 +16,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,9 +45,6 @@ import com.yuchoi.racecert.data.RecordStore
 import com.yuchoi.racecert.sync.DriveSync
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-
-private val pbDateFormatter = DateTimeFormatter.ofPattern("yy.MM.dd")
 
 private val categoryOrder = listOf("10K", "하프", "풀코스", "기타", "거리 미입력")
 
@@ -87,9 +83,6 @@ private fun parseTimeSeconds(t: String): Int? {
     return h.toInt() * 3600 + min.toInt() * 60 + s.toInt()
 }
 
-private fun formatSeconds(sec: Int): String =
-    "%02d:%02d:%02d".format(sec / 3600, (sec % 3600) / 60, sec % 60)
-
 /** 거리 문자열을 PB 그룹용으로 정규화 (10Km/10K/10km → 10km, HALF/하프 → 하프 …) */
 private fun normalizeDistance(raw: String): String {
     val d = raw.trim().uppercase().replace(" ", "")
@@ -115,7 +108,10 @@ private fun computePbs(records: List<RaceRecord>): List<PbEntry> =
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SummaryScreen(bottomBar: @Composable () -> Unit) {
+fun SummaryScreen(
+    bottomBar: @Composable () -> Unit,
+    onOpenRecord: (String) -> Unit = {},
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -320,32 +316,12 @@ fun SummaryScreen(bottomBar: @Composable () -> Unit) {
                 }
             } else {
                 items(pbs, key = { "${it.type.name}-${it.distanceLabel}" }) { pb ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    pb.distanceLabel,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                AssistChip(onClick = {}, label = { Text(pb.type.label) })
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                formatSeconds(pb.seconds),
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                "${pb.record.title.ifBlank { "(제목 없음)" }} · ${pb.record.date.format(pbDateFormatter)}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
+                    // 기록 목록과 완전히 동일한 카드(사진·배경 이미지·날씨·기록 등)로 표시하고,
+                    // 클릭하면 기록 상세로 이동한다.
+                    RecordCard(
+                        record = pb.record,
+                        onClick = { onOpenRecord(pb.record.id) },
+                    )
                 }
             }
 

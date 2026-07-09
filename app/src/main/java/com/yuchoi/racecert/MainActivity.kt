@@ -161,7 +161,10 @@ private fun App(
                 )
             } else {
                 BackHandler { homeTab = 0 }
-                SummaryScreen(bottomBar = bottomBar)
+                SummaryScreen(
+                    bottomBar = bottomBar,
+                    onOpenRecord = { screen = Screen.Detail(it) },
+                )
             }
         }
 

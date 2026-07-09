@@ -167,6 +167,9 @@ fun AddEditRecordScreen(
     var weatherLoading by remember { mutableStateOf(false) }
     val imagePaths: SnapshotStateList<String> =
         remember { existing?.imagePaths.orEmpty().toMutableStateList() }
+    // 카드 대표(썸네일)·배경 이미지로 쓸 사진의 인덱스 (업로드 사진 중에서 각각 선택)
+    var mainImageIndex by remember { mutableStateOf(existing?.mainImageIndex ?: 0) }
+    var bgImageIndex by remember { mutableStateOf(existing?.bgImageIndex ?: 0) }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showBodyDatePicker by remember { mutableStateOf(false) }
@@ -497,6 +500,8 @@ fun AddEditRecordScreen(
             eventNote = eventNote.trim(),
             bib = bib.trim(),
             startTime = startTime.trim(),
+            mainImageIndex = mainImageIndex.coerceIn(0, (imagePaths.size - 1).coerceAtLeast(0)),
+            bgImageIndex = bgImageIndex.coerceIn(0, (imagePaths.size - 1).coerceAtLeast(0)),
         )
         RecordStore.upsert(record)
         com.yuchoi.racecert.sync.DriveSync.requestSync(context)
@@ -520,7 +525,8 @@ fun AddEditRecordScreen(
             memo.trim() != existing.memo || ocrText.trim() != existing.ocrText ||
             imagePaths.toList() != existing.imagePaths || type != existing.type ||
             date != existing.date || bodyDate != existing.bodyDate ||
-            startTime.trim() != existing.startTime
+            startTime.trim() != existing.startTime ||
+            mainImageIndex != existing.mainImageIndex || bgImageIndex != existing.bgImageIndex
     }
 
     fun attemptBack() {
@@ -645,6 +651,8 @@ fun AddEditRecordScreen(
             Spacer(Modifier.height(8.dp))
             ImageStrip(
                 imagePaths = imagePaths,
+                mainIndex = mainImageIndex,
+                bgIndex = bgImageIndex,
                 onAdd = {
                     if (imagePaths.size >= RaceRecord.MAX_IMAGES) {
                         Toast.makeText(
@@ -656,8 +664,23 @@ fun AddEditRecordScreen(
                         showPhotoSourceDialog = true
                     }
                 },
-                onRemove = { path -> imagePaths.remove(path) },
+                onRemove = { path ->
+                    val removed = imagePaths.indexOf(path)
+                    if (removed >= 0) {
+                        imagePaths.removeAt(removed)
+                        // 삭제로 인덱스가 밀리므로 대표·배경 선택을 보정
+                        fun remap(sel: Int) = when {
+                            sel == removed -> 0
+                            sel > removed -> sel - 1
+                            else -> sel
+                        }
+                        mainImageIndex = remap(mainImageIndex)
+                        bgImageIndex = remap(bgImageIndex)
+                    }
+                },
                 onPreview = { path -> previewPath = path },
+                onSetMain = { index -> mainImageIndex = index },
+                onSetBg = { index -> bgImageIndex = index },
                 onRotate = { index ->
                     val path = imagePaths.getOrNull(index) ?: return@ImageStrip
                     scope.launch {
@@ -674,6 +697,10 @@ fun AddEditRecordScreen(
                         val tmp = imagePaths[index]
                         imagePaths[index] = imagePaths[index - 1]
                         imagePaths[index - 1] = tmp
+                        // 순서가 바뀌면 대표·배경 선택도 따라 이동
+                        fun swap(sel: Int) = when (sel) { index -> index - 1; index - 1 -> index; else -> sel }
+                        mainImageIndex = swap(mainImageIndex)
+                        bgImageIndex = swap(bgImageIndex)
                     }
                 },
                 onMoveRight = { index ->
@@ -681,6 +708,9 @@ fun AddEditRecordScreen(
                         val tmp = imagePaths[index]
                         imagePaths[index] = imagePaths[index + 1]
                         imagePaths[index + 1] = tmp
+                        fun swap(sel: Int) = when (sel) { index -> index + 1; index + 1 -> index; else -> sel }
+                        mainImageIndex = swap(mainImageIndex)
+                        bgImageIndex = swap(bgImageIndex)
                     }
                 },
             )
@@ -1228,9 +1258,13 @@ fun AddEditRecordScreen(
 @Composable
 private fun ImageStrip(
     imagePaths: List<String>,
+    mainIndex: Int,
+    bgIndex: Int,
     onAdd: () -> Unit,
     onRemove: (String) -> Unit,
     onPreview: (String) -> Unit,
+    onSetMain: (Int) -> Unit,
+    onSetBg: (Int) -> Unit,
     onRotate: (Int) -> Unit,
     onMoveLeft: (Int) -> Unit,
     onMoveRight: (Int) -> Unit,
@@ -1285,6 +1319,19 @@ private fun ImageStrip(
                             )
                         }
                     }
+                    // 대표/배경으로 선택된 사진은 좌측 상단에 태그 표시
+                    Column(modifier = Modifier.align(Alignment.TopStart).padding(3.dp)) {
+                        if (index == mainIndex) CornerTag("대표", androidx.compose.ui.graphics.Color(0xFF1565C0))
+                        if (index == bgIndex) CornerTag("배경", androidx.compose.ui.graphics.Color(0xFF6A1B9A))
+                    }
+                }
+                // 대표(썸네일)·배경 지정
+                Row(
+                    modifier = Modifier.width(96.dp).padding(top = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    SelectTag("대표", selected = index == mainIndex, modifier = Modifier.weight(1f)) { onSetMain(index) }
+                    SelectTag("배경", selected = index == bgIndex, modifier = Modifier.weight(1f)) { onSetBg(index) }
                 }
                 // 순서 변경 / 회전 컨트롤
                 Row(
@@ -1307,5 +1354,42 @@ private fun ImageStrip(
                 }
             }
         }
+    }
+}
+
+/** 이미지 위 좌측 상단의 작은 태그 (대표/배경) */
+@Composable
+private fun CornerTag(text: String, color: androidx.compose.ui.graphics.Color) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = androidx.compose.ui.graphics.Color.White,
+        modifier = Modifier
+            .padding(bottom = 2.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(color.copy(alpha = 0.85f))
+            .padding(horizontal = 4.dp, vertical = 1.dp),
+    )
+}
+
+/** 대표/배경 지정 토글 버튼 */
+@Composable
+private fun SelectTag(
+    text: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val bg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(vertical = 3.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, style = MaterialTheme.typography.labelSmall, color = fg)
     }
 }

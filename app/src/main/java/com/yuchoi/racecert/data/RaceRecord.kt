@@ -35,8 +35,18 @@ data class RaceRecord(
     val eventNote: String = "",
     val bib: String = "",
     val startTime: String = "",
+    /** 카드 대표(썸네일) 이미지로 쓸 사진의 인덱스 */
+    val mainImageIndex: Int = 0,
+    /** 카드 배경으로 깔 사진의 인덱스 (대표와 다르게 지정 가능) */
+    val bgImageIndex: Int = 0,
 ) {
     val date: LocalDate get() = LocalDate.ofEpochDay(dateEpochDay)
+
+    /** 카드 대표(썸네일) 이미지 경로. 지정이 어긋나면 첫 사진으로 폴백. */
+    val mainImagePath: String? get() = imagePaths.getOrNull(mainImageIndex) ?: imagePaths.firstOrNull()
+
+    /** 카드 배경 이미지 경로. 지정이 어긋나면 첫 사진으로 폴백. */
+    val bgImagePath: String? get() = imagePaths.getOrNull(bgImageIndex) ?: imagePaths.firstOrNull()
 
     /** 문자열에서 숫자만 뽑아 금액으로. (예: "30,000원" → 30000) */
     private fun amountOf(s: String): Long = s.filter { it.isDigit() }.toLongOrNull() ?: 0L

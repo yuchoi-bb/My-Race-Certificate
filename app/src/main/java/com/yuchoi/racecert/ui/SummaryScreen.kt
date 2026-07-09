@@ -39,8 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.yuchoi.racecert.BuildConfig
 import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
 import com.yuchoi.racecert.data.BackupManager
-import com.yuchoi.racecert.data.RaceRecord
-import com.yuchoi.racecert.data.RaceType
+import com.yuchoi.racecert.data.PbCalc
 import com.yuchoi.racecert.data.RecordStore
 import com.yuchoi.racecert.sync.DriveSync
 import kotlinx.coroutines.launch
@@ -67,44 +66,6 @@ private fun syncMessage(r: DriveSync.SyncResult): String = when (r) {
     DriveSync.SyncResult.NOT_SIGNED_IN -> "로그인이 필요해요."
     DriveSync.SyncResult.ERROR -> "동기화 실패 (네트워크/권한/OAuth 설정 확인)."
 }
-
-/** 종목+거리 그룹의 최고 기록(PB) 한 건 */
-private data class PbEntry(
-    val type: RaceType,
-    val distanceLabel: String,
-    val seconds: Int,
-    val record: RaceRecord,
-)
-
-/** "HH:MM:SS" → 초. 형식이 아니면 null */
-private fun parseTimeSeconds(t: String): Int? {
-    val m = Regex("""^(\d{1,2}):(\d{2}):(\d{2})$""").find(t.trim()) ?: return null
-    val (h, min, s) = m.destructured
-    return h.toInt() * 3600 + min.toInt() * 60 + s.toInt()
-}
-
-/** 거리 문자열을 PB 그룹용으로 정규화 (10Km/10K/10km → 10km, HALF/하프 → 하프 …) */
-private fun normalizeDistance(raw: String): String {
-    val d = raw.trim().uppercase().replace(" ", "")
-    return when {
-        d.isEmpty() -> "거리 미입력"
-        d.contains("하프") || d.contains("HALF") -> "하프"
-        d.contains("풀") || d.contains("FULL") || d.contains("42.195") || d.contains("42K") -> "풀코스"
-        else -> {
-            val km = Regex("""(\d{1,3}(?:\.\d+)?)K""").find(d)?.groupValues?.get(1)
-            if (km != null) "${km}km" else raw.trim()
-        }
-    }
-}
-
-private fun computePbs(records: List<RaceRecord>): List<PbEntry> =
-    records.mapNotNull { r ->
-        val sec = parseTimeSeconds(r.recordTime) ?: return@mapNotNull null
-        PbEntry(r.type, normalizeDistance(r.distance), sec, r)
-    }
-        .groupBy { it.type to it.distanceLabel }
-        .map { (_, entries) -> entries.minBy { it.seconds } }
-        .sortedWith(compareBy({ it.type.ordinal }, { it.seconds }))
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -174,7 +135,7 @@ fun SummaryScreen(
     // 예정(미래) 대회는 참가 통계에서 제외
     val records = all.filter { !it.date.isAfter(today) }
     val upcomingCount = all.size - records.size
-    val pbs = remember(records) { computePbs(records) }
+    val pbs = remember(records) { PbCalc.compute(records) }
     val thisYear = today.year
     val thisYearCount = records.count { it.date.year == thisYear }
     val typeCounts = records.groupingBy { it.type }.eachCount()
@@ -321,6 +282,7 @@ fun SummaryScreen(
                     RecordCard(
                         record = pb.record,
                         onClick = { onOpenRecord(pb.record.id) },
+                        isPb = true,
                     )
                 }
             }

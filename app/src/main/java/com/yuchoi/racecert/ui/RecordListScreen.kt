@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Image as ForegroundImage
 import com.yuchoi.racecert.BuildConfig
+import com.yuchoi.racecert.data.PbCalc
 import com.yuchoi.racecert.data.RaceRecord
 import com.yuchoi.racecert.data.RaceType
 import com.yuchoi.racecert.data.RecordStore
@@ -125,6 +126,8 @@ fun RecordListScreen(
         val base = all.filter { !it.date.isAfter(today) }
         if (newestFirst) base.sortedWith(comparator.reversed()) else base.sortedWith(comparator)
     }
+    // 종목·거리별 개인 최고 기록(PB)에 해당하는 기록 id (카드에 PB 배지 표시)
+    val pbIds = remember(all) { PbCalc.bestRecordIds(all.filter { !it.date.isAfter(today) }) }
 
     // 목록을 행(row) 목록으로 평탄화해 인덱스로 스크롤할 수 있게 한다.
     val rows: List<ListRow> = remember(upcoming, past, upcomingExpanded) {
@@ -249,6 +252,7 @@ fun RecordListScreen(
                             record = row.record,
                             onClick = { onOpenRecord(row.record.id) },
                             highlighted = row.record.id == highlightId,
+                            isPb = row.record.id in pbIds,
                         )
                     }
                 }
@@ -320,7 +324,7 @@ private fun UpcomingCard(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Thumbnail(path = record.imagePaths.firstOrNull())
+            Thumbnail(path = record.mainImagePath)
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -360,7 +364,12 @@ private fun UpcomingCard(
 }
 
 @Composable
-internal fun RecordCard(record: RaceRecord, onClick: () -> Unit, highlighted: Boolean = false) {
+internal fun RecordCard(
+    record: RaceRecord,
+    onClick: () -> Unit,
+    highlighted: Boolean = false,
+    isPb: Boolean = false,
+) {
     Card(
         modifier = Modifier.fillMaxWidth()
             .then(if (highlighted) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)) else Modifier)
@@ -368,8 +377,8 @@ internal fun RecordCard(record: RaceRecord, onClick: () -> Unit, highlighted: Bo
         colors = CardDefaults.cardColors(containerColor = cardColor(record)),
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
-            // 기록증 사진을 카드 배경으로 흐릿하게 깔기
-            val bgPath = record.imagePaths.firstOrNull()
+            // 카드 배경으로 흐릿하게 깔 이미지 (대표와 별도로 지정 가능)
+            val bgPath = record.bgImagePath
             if (bgPath != null) {
                 val bg = rememberSampledBitmap(bgPath, reqSizePx = 512)
                 if (bg != null) {
@@ -383,7 +392,7 @@ internal fun RecordCard(record: RaceRecord, onClick: () -> Unit, highlighted: Bo
                 }
             }
             Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Thumbnail(path = record.imagePaths.firstOrNull())
+            MainImage(path = record.mainImagePath)
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -458,6 +467,59 @@ internal fun RecordCard(record: RaceRecord, onClick: () -> Unit, highlighted: Bo
                         .widthIn(max = 140.dp),
                 )
             }
+            // PB(개인 최고 기록) 배지: 카드 우측 하단
+            if (isPb) {
+                PbBadge(modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp))
+            }
+        }
+    }
+}
+
+/** PB 트로피 배지 */
+@Composable
+private fun PbBadge(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xFFFFD54F))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("🏆", style = MaterialTheme.typography.labelMedium)
+        Spacer(Modifier.width(3.dp))
+        Text(
+            "PB",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF5D4037),
+        )
+    }
+}
+
+/** 카드 대표 이미지 (기록증은 세로형이 많아 세로로 크게 표시) */
+@Composable
+private fun MainImage(path: String?) {
+    Box(
+        modifier = Modifier
+            .size(width = 88.dp, height = 116.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White.copy(alpha = 0.6f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        val bitmap = path?.let { rememberSampledBitmap(it, reqSizePx = 512) }
+        if (bitmap != null) {
+            ForegroundImage(
+                bitmap = bitmap,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Icon(
+                Icons.Filled.Image,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

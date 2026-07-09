@@ -170,6 +170,8 @@ object RecordStore {
                         eventNote = obj.optString("eventNote"),
                         bib = obj.optString("bib"),
                         startTime = obj.optString("startTime"),
+                        mainImageIndex = obj.optInt("mainImageIndex"),
+                        bgImageIndex = obj.optInt("bgImageIndex"),
                     )
                 )
             }
@@ -199,6 +201,8 @@ object RecordStore {
             obj.put("eventNote", record.eventNote)
             obj.put("bib", record.bib)
             obj.put("startTime", record.startTime)
+            obj.put("mainImageIndex", record.mainImageIndex)
+            obj.put("bgImageIndex", record.bgImageIndex)
             array.put(obj)
         }
         runCatching { dataFile.writeText(array.toString()) }

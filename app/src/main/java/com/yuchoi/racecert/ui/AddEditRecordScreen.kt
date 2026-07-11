@@ -904,7 +904,7 @@ fun AddEditRecordScreen(
                 value = memo,
                 onValueChange = { memo = it },
                 label = { Text("대회 느낀점 / 메모") },
-                modifier = Modifier.fillMaxWidth().height(140.dp),
+                modifier = Modifier.fillMaxWidth().height(280.dp),
             )
             Spacer(Modifier.height(16.dp))
 

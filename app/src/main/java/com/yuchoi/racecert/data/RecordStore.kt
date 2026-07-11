@@ -172,6 +172,8 @@ object RecordStore {
                         startTime = obj.optString("startTime"),
                         mainImageIndex = obj.optInt("mainImageIndex"),
                         bgImageIndex = obj.optInt("bgImageIndex"),
+                        stravaInfo = obj.optString("stravaInfo"),
+                        routePolyline = obj.optString("routePolyline"),
                     )
                 )
             }
@@ -203,6 +205,8 @@ object RecordStore {
             obj.put("startTime", record.startTime)
             obj.put("mainImageIndex", record.mainImageIndex)
             obj.put("bgImageIndex", record.bgImageIndex)
+            obj.put("stravaInfo", record.stravaInfo)
+            obj.put("routePolyline", record.routePolyline)
             array.put(obj)
         }
         runCatching { dataFile.writeText(array.toString()) }

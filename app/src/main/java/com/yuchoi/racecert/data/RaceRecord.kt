@@ -39,6 +39,10 @@ data class RaceRecord(
     val mainImageIndex: Int = 0,
     /** 카드 배경으로 깔 사진의 인덱스 (대표와 다르게 지정 가능) */
     val bgImageIndex: Int = 0,
+    /** Strava에서 가져온 상세 요약(종목·심박·케이던스·고도·페이스 등) 표시용 문자열 */
+    val stravaInfo: String = "",
+    /** Strava 코스 경로(구글 encoded polyline). 상세 화면에서 경로 스케치로 그린다. */
+    val routePolyline: String = "",
 ) {
     val date: LocalDate get() = LocalDate.ofEpochDay(dateEpochDay)
 

@@ -170,6 +170,9 @@ fun AddEditRecordScreen(
     // 카드 대표(썸네일)·배경 이미지로 쓸 사진의 인덱스 (업로드 사진 중에서 각각 선택)
     var mainImageIndex by remember { mutableStateOf(existing?.mainImageIndex ?: 0) }
     var bgImageIndex by remember { mutableStateOf(existing?.bgImageIndex ?: 0) }
+    // Strava에서 가져온 상세 요약 · 코스 경로
+    var stravaInfo by remember { mutableStateOf(existing?.stravaInfo ?: "") }
+    var routePolyline by remember { mutableStateOf(existing?.routePolyline ?: "") }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showBodyDatePicker by remember { mutableStateOf(false) }
@@ -457,9 +460,12 @@ fun AddEditRecordScreen(
                         startTime = run.startTime
                         startTimeManuallySet = true
                     }
+                    // 상세 요약·코스는 Strava에서 파생된 값이므로 항상 갱신
+                    stravaInfo = run.metricsSummary()
+                    routePolyline = run.polyline
                     Toast.makeText(
                         context,
-                        "✅ Strava: ${run.name} · ${com.yuchoi.racecert.strava.StravaService.formatDuration(run.elapsedSeconds)} · %.1fkm".format(run.distanceKm),
+                        "✅ Strava: ${run.name}\n${run.metricsSummary()}",
                         Toast.LENGTH_LONG,
                     ).show()
                 }
@@ -556,6 +562,8 @@ fun AddEditRecordScreen(
             startTime = startTime.trim(),
             mainImageIndex = mainImageIndex.coerceIn(0, (imagePaths.size - 1).coerceAtLeast(0)),
             bgImageIndex = bgImageIndex.coerceIn(0, (imagePaths.size - 1).coerceAtLeast(0)),
+            stravaInfo = stravaInfo,
+            routePolyline = routePolyline,
         )
         RecordStore.upsert(record)
         com.yuchoi.racecert.sync.DriveSync.requestSync(context)
@@ -580,7 +588,8 @@ fun AddEditRecordScreen(
             imagePaths.toList() != existing.imagePaths || type != existing.type ||
             date != existing.date || bodyDate != existing.bodyDate ||
             startTime.trim() != existing.startTime ||
-            mainImageIndex != existing.mainImageIndex || bgImageIndex != existing.bgImageIndex
+            mainImageIndex != existing.mainImageIndex || bgImageIndex != existing.bgImageIndex ||
+            stravaInfo != existing.stravaInfo || routePolyline != existing.routePolyline
     }
 
     fun attemptBack() {

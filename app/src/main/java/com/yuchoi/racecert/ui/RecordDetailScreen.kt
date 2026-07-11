@@ -180,6 +180,39 @@ fun RecordDetailScreen(
                     }
                 }
             }
+
+            // Strava에서 가져온 상세 기록 + 코스 경로
+            if (record.stravaInfo.isNotBlank() || record.routePolyline.isNotBlank()) {
+                Spacer(Modifier.height(12.dp))
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "Strava 기록",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        if (record.stravaInfo.isNotBlank()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(record.stravaInfo, style = MaterialTheme.typography.bodyMedium)
+                        }
+                        if (record.routePolyline.isNotBlank()) {
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                "코스",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            RouteMap(
+                                polyline = record.routePolyline,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp),
+                            )
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(16.dp))
 
             if (record.imagePaths.isEmpty()) {

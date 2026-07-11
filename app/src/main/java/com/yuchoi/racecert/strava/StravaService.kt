@@ -14,12 +14,39 @@ object StravaService {
 
     data class Run(
         val name: String,
+        val sportType: String,
         val distanceKm: Double,
         val elapsedSeconds: Int,
         val movingSeconds: Int,
         val startTime: String, // "HH:mm"
         val date: LocalDate,
-    )
+        val avgHr: Double?,
+        val maxHr: Double?,
+        val avgCadenceSpm: Int?,   // 분당 걸음 수 (Strava cadence × 2)
+        val elevationGainM: Double?,
+        val polyline: String,
+    ) {
+        /** 평균 페이스 (mm'ss"/km). 거리·이동시간 기반. */
+        val paceLabel: String?
+            get() {
+                if (distanceKm <= 0 || movingSeconds <= 0) return null
+                val secPerKm = (movingSeconds / distanceKm).toInt()
+                return "%d'%02d\"/km".format(secPerKm / 60, secPerKm % 60)
+            }
+
+        /** 카드/상세에 표시할 상세 요약(있는 항목만). */
+        fun metricsSummary(): String = buildString {
+            append("🏃 $sportType")
+            append(" · 📏 %.2fkm".format(distanceKm))
+            paceLabel?.let { append(" · ⏱️ $it") }
+            if (avgHr != null) {
+                append(" · ❤️ 평균 ${avgHr.toInt()}")
+                if (maxHr != null) append("/최대 ${maxHr.toInt()}")
+            }
+            avgCadenceSpm?.let { append(" · 👟 ${it}spm") }
+            elevationGainM?.let { append(" · ⛰️ 고도 ${it.toInt()}m") }
+        }
+    }
 
     /**
      * 어디서 막히는지 화면에 숫자 코드로 알린다.
@@ -66,13 +93,21 @@ object StravaService {
                 val startLocal = o.optString("start_date_local") // "2024-03-17T08:00:00Z"
                 val d = runCatching { LocalDate.parse(startLocal.substring(0, 10)) }.getOrNull() ?: continue
                 if (d != date) continue
+                fun dbl(key: String): Double? = o.optDouble(key, Double.NaN).takeIf { !it.isNaN() }
+                val cadence = dbl("average_cadence")
                 val run = Run(
                     name = o.optString("name"),
+                    sportType = type,
                     distanceKm = o.optDouble("distance", 0.0) / 1000.0,
                     elapsedSeconds = o.optInt("elapsed_time", 0),
                     movingSeconds = o.optInt("moving_time", 0),
                     startTime = runCatching { startLocal.substring(11, 16) }.getOrNull().orEmpty(),
                     date = d,
+                    avgHr = dbl("average_heartrate"),
+                    maxHr = dbl("max_heartrate"),
+                    avgCadenceSpm = cadence?.let { (it * 2).toInt() },
+                    elevationGainM = dbl("total_elevation_gain"),
+                    polyline = o.optJSONObject("map")?.optString("summary_polyline").orEmpty(),
                 )
                 // 같은 날 여러 활동이면 가장 긴(대회일 가능성 높은) 것
                 if (best == null || run.distanceKm > best.distanceKm) best = run

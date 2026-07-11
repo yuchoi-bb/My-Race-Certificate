@@ -25,6 +25,8 @@ object StravaService {
         val avgCadenceSpm: Int?,   // 분당 걸음 수 (Strava cadence × 2)
         val elevationGainM: Double?,
         val polyline: String,
+        val startLat: Double?,     // 시작 위치 (날씨 조회용)
+        val startLng: Double?,
     ) {
         /** 평균 페이스 (mm'ss"/km). 거리·이동시간 기반. */
         val paceLabel: String?
@@ -95,6 +97,8 @@ object StravaService {
                 if (d != date) continue
                 fun dbl(key: String): Double? = o.optDouble(key, Double.NaN).takeIf { !it.isNaN() }
                 val cadence = dbl("average_cadence")
+                val sll = o.optJSONArray("start_latlng")
+                val hasStart = sll != null && sll.length() >= 2
                 val run = Run(
                     name = o.optString("name"),
                     sportType = type,
@@ -108,6 +112,8 @@ object StravaService {
                     avgCadenceSpm = cadence?.let { (it * 2).toInt() },
                     elevationGainM = dbl("total_elevation_gain"),
                     polyline = o.optJSONObject("map")?.optString("summary_polyline").orEmpty(),
+                    startLat = if (hasStart) sll!!.optDouble(0) else null,
+                    startLng = if (hasStart) sll!!.optDouble(1) else null,
                 )
                 // 같은 날 여러 활동이면 가장 긴(대회일 가능성 높은) 것
                 if (best == null || run.distanceKm > best.distanceKm) best = run

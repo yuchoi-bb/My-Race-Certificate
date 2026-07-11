@@ -446,23 +446,36 @@ fun AddEditRecordScreen(
         scope.launch {
             stravaFetching = true
             val r = com.yuchoi.racecert.strava.StravaService.runOnDate(context, date)
-            stravaFetching = false
             when (r) {
                 is com.yuchoi.racecert.strava.StravaService.Result.Success -> {
                     val run = r.run
-                    if (recordTime.isBlank()) {
-                        recordTime = com.yuchoi.racecert.strava.StravaService.formatDuration(run.elapsedSeconds)
-                    }
-                    if (distance.isBlank()) {
-                        distance = com.yuchoi.racecert.strava.StravaService.distanceLabel(run.distanceKm)
-                    }
+                    // Strava 값으로 기존 입력을 덮어쓴다
+                    recordTime = com.yuchoi.racecert.strava.StravaService.formatDuration(run.elapsedSeconds)
+                    distance = com.yuchoi.racecert.strava.StravaService.distanceLabel(run.distanceKm)
                     if (run.startTime.isNotBlank()) {
                         startTime = run.startTime
                         startTimeManuallySet = true
                     }
-                    // 상세 요약·코스는 Strava에서 파생된 값이므로 항상 갱신
                     stravaInfo = run.metricsSummary()
                     routePolyline = run.polyline
+
+                    // 시작 좌표 + 시작~종료 시간대로 날씨 다시 계산해 덮어쓴다
+                    if (run.startLat != null && run.startLng != null && run.startTime.isNotBlank()) {
+                        val place = WeatherService.Place(
+                            name = location.ifBlank { "대회 장소" },
+                            displayName = "",
+                            lat = run.startLat,
+                            lon = run.startLng,
+                        )
+                        val wr = WeatherService.weatherAt(
+                            place,
+                            date,
+                            run.startTime,
+                            com.yuchoi.racecert.strava.StravaService.formatDuration(run.elapsedSeconds),
+                        )
+                        if (wr is WeatherService.Result.Success) weather = wr.text
+                    }
+
                     Toast.makeText(
                         context,
                         "✅ Strava: ${run.name}\n${run.metricsSummary()}",
@@ -480,6 +493,7 @@ fun AddEditRecordScreen(
                 com.yuchoi.racecert.strava.StravaService.Result.NetworkError ->
                     Toast.makeText(context, "코드 9: Strava 통신 오류.", Toast.LENGTH_LONG).show()
             }
+            stravaFetching = false
         }
     }
 

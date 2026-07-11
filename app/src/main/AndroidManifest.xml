@@ -52,6 +52,21 @@
             </intent-filter>
         </activity>
 
+        <!-- Strava OAuth 리다이렉트(racecert://localhost) 수신 -->
+        <activity
+            android:name=".strava.StravaRedirectActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="racecert" android:host="localhost" />
+            </intent-filter>
+        </activity>
+
         <!-- 헬스커넥트 권한 사용 안내 진입점 (Android 14+ / API 34+) -->
         <activity-alias
             android:name="ViewPermissionUsageActivity"

@@ -334,6 +334,47 @@ fun SummaryScreen(
                 }
             }
 
+            item(key = "strava") {
+                var stravaConnected by remember { mutableStateOf(com.yuchoi.racecert.strava.StravaAuth.isConnected(context)) }
+                Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Strava 연동", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Strava 계정을 연결하면, 기록 추가/수정 화면에서 '이 대회 날짜 러닝 가져오기'로 완주 시간·거리·시작 시간을 자동으로 채울 수 있어요. (가민 러닝도 Strava로 들어오면 함께)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        if (stravaConnected) {
+                            val who = com.yuchoi.racecert.strava.StravaAuth.athleteName(context)
+                            Text("연결됨${who?.let { " · $it" } ?: ""}", style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    com.yuchoi.racecert.strava.StravaAuth.disconnect(context)
+                                    stravaConnected = false
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("Strava 연결 해제") }
+                        } else {
+                            Button(
+                                onClick = { context.startActivity(com.yuchoi.racecert.strava.StravaAuth.authorizeIntent()) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text("🔗 Strava 연결") }
+                            if (!com.yuchoi.racecert.strava.StravaAuth.hasClientSecret()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    "※ 서버에 Strava Client Secret이 아직 설정되지 않았어요. (GitHub Secret STRAVA_CLIENT_SECRET 추가 후 다음 빌드부터 동작)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             item(key = "backup") {
                 Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
                     Column(modifier = Modifier.padding(16.dp)) {

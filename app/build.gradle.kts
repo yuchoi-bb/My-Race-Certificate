@@ -17,6 +17,14 @@ android {
         targetSdk = 35
         versionCode = buildNumber
         versionName = "1.0.$buildNumber"
+
+        // Strava 연동: Client ID는 공개값이라 코드에 두고, Secret은 CI의 GitHub Secret에서 주입.
+        buildConfigField("String", "STRAVA_CLIENT_ID", "\"264239\"")
+        buildConfigField(
+            "String",
+            "STRAVA_CLIENT_SECRET",
+            "\"${System.getenv("STRAVA_CLIENT_SECRET") ?: ""}\"",
+        )
     }
 
     signingConfigs {

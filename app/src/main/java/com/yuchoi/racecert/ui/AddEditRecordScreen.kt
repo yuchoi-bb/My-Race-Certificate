@@ -423,6 +423,60 @@ fun AddEditRecordScreen(
         }
     }
 
+    // ── Strava에서 이 대회 날짜의 러닝 가져오기 ──
+    var stravaFetching by remember { mutableStateOf(false) }
+
+    fun fetchFromStrava() {
+        if (!com.yuchoi.racecert.strava.StravaAuth.hasClientSecret()) {
+            Toast.makeText(
+                context,
+                "코드 1: 서버에 Strava Client Secret이 설정되지 않았어요. (GitHub Secret STRAVA_CLIENT_SECRET 추가 필요)",
+                Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
+        if (!com.yuchoi.racecert.strava.StravaAuth.isConnected(context)) {
+            context.startActivity(com.yuchoi.racecert.strava.StravaAuth.authorizeIntent())
+            Toast.makeText(context, "Strava 로그인·승인 후 다시 '가져오기'를 눌러 주세요.", Toast.LENGTH_LONG).show()
+            return
+        }
+        scope.launch {
+            stravaFetching = true
+            val r = com.yuchoi.racecert.strava.StravaService.runOnDate(context, date)
+            stravaFetching = false
+            when (r) {
+                is com.yuchoi.racecert.strava.StravaService.Result.Success -> {
+                    val run = r.run
+                    if (recordTime.isBlank()) {
+                        recordTime = com.yuchoi.racecert.strava.StravaService.formatDuration(run.elapsedSeconds)
+                    }
+                    if (distance.isBlank()) {
+                        distance = com.yuchoi.racecert.strava.StravaService.distanceLabel(run.distanceKm)
+                    }
+                    if (run.startTime.isNotBlank()) {
+                        startTime = run.startTime
+                        startTimeManuallySet = true
+                    }
+                    Toast.makeText(
+                        context,
+                        "✅ Strava: ${run.name} · ${com.yuchoi.racecert.strava.StravaService.formatDuration(run.elapsedSeconds)} · %.1fkm".format(run.distanceKm),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+                com.yuchoi.racecert.strava.StravaService.Result.NoSecret ->
+                    Toast.makeText(context, "코드 1: Strava Client Secret 미설정.", Toast.LENGTH_LONG).show()
+                com.yuchoi.racecert.strava.StravaService.Result.NotConnected -> {
+                    context.startActivity(com.yuchoi.racecert.strava.StravaAuth.authorizeIntent())
+                    Toast.makeText(context, "코드 2: Strava 로그인이 필요해요. 승인 후 다시 눌러 주세요.", Toast.LENGTH_LONG).show()
+                }
+                com.yuchoi.racecert.strava.StravaService.Result.NoActivity ->
+                    Toast.makeText(context, "코드 5: ${date.format(formatter)}에 Strava 러닝 활동이 없어요.", Toast.LENGTH_LONG).show()
+                com.yuchoi.racecert.strava.StravaService.Result.NetworkError ->
+                    Toast.makeText(context, "코드 9: Strava 통신 오류.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     // 장소 후보를 찾아 선택 다이얼로그를 띄운다
     fun searchPlaces() {
         if (location.isBlank()) {
@@ -759,6 +813,20 @@ fun AddEditRecordScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { fetchFromStrava() },
+                enabled = !stravaFetching,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (stravaFetching) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Filled.AutoAwesome, contentDescription = null)
+                }
+                Spacer(Modifier.width(8.dp))
+                Text("Strava에서 이 대회 날짜 러닝 가져오기")
+            }
             Spacer(Modifier.height(12.dp))
 
             OutlinedTextField(

@@ -28,7 +28,7 @@ jobs:
 
       - name: Build signed release APK
         env:
-          STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
+          STRAVA_CLIENT_SECRET: ${{ secrets.STRAVASECRET }}
         run: ./gradlew assembleRelease -PbuildNumber=${{ github.run_number }}
 
       - name: Rename APK

@@ -443,55 +443,86 @@ fun AddEditRecordScreen(
             Toast.makeText(context, "Strava 로그인·승인 후 다시 '가져오기'를 눌러 주세요.", Toast.LENGTH_LONG).show()
             return
         }
+        // Strava 시작 좌표 + 시작~완주 시간대로 날씨를 다시 받아 덮어쓴다
+        suspend fun refreshWeather(lat: Double?, lng: Double?, startT: String, durationSec: Int) {
+            if (lat == null || lng == null || startT.isBlank()) return
+            val place = WeatherService.Place(
+                name = location.ifBlank { "대회 장소" },
+                displayName = "",
+                lat = lat,
+                lon = lng,
+            )
+            val wr = WeatherService.weatherAt(
+                place, date, startT,
+                com.yuchoi.racecert.strava.StravaService.formatDuration(durationSec),
+            )
+            if (wr is WeatherService.Result.Success) weather = wr.text
+        }
+
         scope.launch {
             stravaFetching = true
-            val r = com.yuchoi.racecert.strava.StravaService.runOnDate(context, date)
-            when (r) {
-                is com.yuchoi.racecert.strava.StravaService.Result.Success -> {
-                    val run = r.run
-                    // Strava 값으로 기존 입력을 덮어쓴다
-                    recordTime = com.yuchoi.racecert.strava.StravaService.formatDuration(run.elapsedSeconds)
-                    distance = com.yuchoi.racecert.strava.StravaService.distanceLabel(run.distanceKm)
-                    if (run.startTime.isNotBlank()) {
-                        startTime = run.startTime
-                        startTimeManuallySet = true
+            if (type == RaceType.TRIATHLON) {
+                // 철인3종: 그 날의 수영·바이크·러닝 등 모든 활동을 합산 매핑
+                when (val m = com.yuchoi.racecert.strava.StravaService.activitiesOnDate(context, date)) {
+                    is com.yuchoi.racecert.strava.StravaService.MultiResult.Success -> {
+                        val tri = com.yuchoi.racecert.strava.StravaService.combineTriathlon(m.activities)
+                        recordTime = com.yuchoi.racecert.strava.StravaService.formatDuration(tri.totalSeconds)
+                        distance = tri.distanceLabel
+                        if (tri.startTime.isNotBlank()) {
+                            startTime = tri.startTime
+                            startTimeManuallySet = true
+                        }
+                        stravaInfo = tri.info
+                        routePolyline = tri.polyline
+                        refreshWeather(tri.startLat, tri.startLng, tri.startTime, tri.totalSeconds)
+                        Toast.makeText(
+                            context,
+                            "✅ Strava 철인3종 ${m.activities.size}개 종목 합산\n${tri.info}",
+                            Toast.LENGTH_LONG,
+                        ).show()
                     }
-                    stravaInfo = run.metricsSummary()
-                    routePolyline = run.polyline
-
-                    // 시작 좌표 + 시작~종료 시간대로 날씨 다시 계산해 덮어쓴다
-                    if (run.startLat != null && run.startLng != null && run.startTime.isNotBlank()) {
-                        val place = WeatherService.Place(
-                            name = location.ifBlank { "대회 장소" },
-                            displayName = "",
-                            lat = run.startLat,
-                            lon = run.startLng,
-                        )
-                        val wr = WeatherService.weatherAt(
-                            place,
-                            date,
-                            run.startTime,
-                            com.yuchoi.racecert.strava.StravaService.formatDuration(run.elapsedSeconds),
-                        )
-                        if (wr is WeatherService.Result.Success) weather = wr.text
+                    com.yuchoi.racecert.strava.StravaService.MultiResult.NoSecret ->
+                        Toast.makeText(context, "코드 1: Strava Client Secret 미설정.", Toast.LENGTH_LONG).show()
+                    com.yuchoi.racecert.strava.StravaService.MultiResult.NotConnected -> {
+                        context.startActivity(com.yuchoi.racecert.strava.StravaAuth.authorizeIntent())
+                        Toast.makeText(context, "코드 2: Strava 로그인이 필요해요. 승인 후 다시 눌러 주세요.", Toast.LENGTH_LONG).show()
                     }
-
-                    Toast.makeText(
-                        context,
-                        "✅ Strava: ${run.name}\n${run.metricsSummary()}",
-                        Toast.LENGTH_LONG,
-                    ).show()
+                    com.yuchoi.racecert.strava.StravaService.MultiResult.NoActivity ->
+                        Toast.makeText(context, "코드 5: ${date.format(formatter)}에 Strava 활동이 없어요.", Toast.LENGTH_LONG).show()
+                    com.yuchoi.racecert.strava.StravaService.MultiResult.NetworkError ->
+                        Toast.makeText(context, "코드 9: Strava 통신 오류.", Toast.LENGTH_LONG).show()
                 }
-                com.yuchoi.racecert.strava.StravaService.Result.NoSecret ->
-                    Toast.makeText(context, "코드 1: Strava Client Secret 미설정.", Toast.LENGTH_LONG).show()
-                com.yuchoi.racecert.strava.StravaService.Result.NotConnected -> {
-                    context.startActivity(com.yuchoi.racecert.strava.StravaAuth.authorizeIntent())
-                    Toast.makeText(context, "코드 2: Strava 로그인이 필요해요. 승인 후 다시 눌러 주세요.", Toast.LENGTH_LONG).show()
+            } else {
+                when (val r = com.yuchoi.racecert.strava.StravaService.runOnDate(context, date)) {
+                    is com.yuchoi.racecert.strava.StravaService.Result.Success -> {
+                        val run = r.run
+                        // Strava 값으로 기존 입력을 덮어쓴다
+                        recordTime = com.yuchoi.racecert.strava.StravaService.formatDuration(run.elapsedSeconds)
+                        distance = com.yuchoi.racecert.strava.StravaService.distanceLabel(run.distanceKm)
+                        if (run.startTime.isNotBlank()) {
+                            startTime = run.startTime
+                            startTimeManuallySet = true
+                        }
+                        stravaInfo = run.metricsSummary()
+                        routePolyline = run.polyline
+                        refreshWeather(run.startLat, run.startLng, run.startTime, run.elapsedSeconds)
+                        Toast.makeText(
+                            context,
+                            "✅ Strava: ${run.name}\n${run.metricsSummary()}",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                    com.yuchoi.racecert.strava.StravaService.Result.NoSecret ->
+                        Toast.makeText(context, "코드 1: Strava Client Secret 미설정.", Toast.LENGTH_LONG).show()
+                    com.yuchoi.racecert.strava.StravaService.Result.NotConnected -> {
+                        context.startActivity(com.yuchoi.racecert.strava.StravaAuth.authorizeIntent())
+                        Toast.makeText(context, "코드 2: Strava 로그인이 필요해요. 승인 후 다시 눌러 주세요.", Toast.LENGTH_LONG).show()
+                    }
+                    com.yuchoi.racecert.strava.StravaService.Result.NoActivity ->
+                        Toast.makeText(context, "코드 5: ${date.format(formatter)}에 Strava 러닝 활동이 없어요.", Toast.LENGTH_LONG).show()
+                    com.yuchoi.racecert.strava.StravaService.Result.NetworkError ->
+                        Toast.makeText(context, "코드 9: Strava 통신 오류.", Toast.LENGTH_LONG).show()
                 }
-                com.yuchoi.racecert.strava.StravaService.Result.NoActivity ->
-                    Toast.makeText(context, "코드 5: ${date.format(formatter)}에 Strava 러닝 활동이 없어요.", Toast.LENGTH_LONG).show()
-                com.yuchoi.racecert.strava.StravaService.Result.NetworkError ->
-                    Toast.makeText(context, "코드 9: Strava 통신 오류.", Toast.LENGTH_LONG).show()
             }
             stravaFetching = false
         }

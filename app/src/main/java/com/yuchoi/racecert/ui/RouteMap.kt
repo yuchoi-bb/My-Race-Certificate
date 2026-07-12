@@ -49,7 +49,13 @@ private const val TILE = 256.0
 fun RouteMap(polyline: String, modifier: Modifier = Modifier, routeColor: Color = Color(0xFFFC4C02)) {
     val context = LocalContext.current
     val density = LocalDensity.current
-    val points = remember(polyline) { decodePolyline(polyline) }
+    // 여러 종목(수영·바이크·러닝)의 경로가 줄바꿈으로 이어져 올 수 있으므로 각각 분리해 그린다
+    val legs = remember(polyline) {
+        polyline.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+            .map { decodePolyline(it) }.filter { it.size >= 2 }
+    }
+    if (legs.isEmpty()) return
+    val points = remember(legs) { legs.flatten() }
     if (points.size < 2) return
 
     BoxWithConstraints(
@@ -62,7 +68,7 @@ fun RouteMap(polyline: String, modifier: Modifier = Modifier, routeColor: Color 
 
         val data by produceState<RouteMapData?>(null, polyline, wPx, hPx) {
             value = if (wPx <= 0 || hPx <= 0) null
-            else withContext(Dispatchers.IO) { buildMap(context, points, wPx, hPx) }
+            else withContext(Dispatchers.IO) { buildMap(context, legs, points, wPx, hPx) }
         }
 
         val map = data
@@ -73,22 +79,25 @@ fun RouteMap(polyline: String, modifier: Modifier = Modifier, routeColor: Color 
         } else {
             Canvas(Modifier.fillMaxSize()) {
                 map.tiles.forEach { drawImage(it.bmp, topLeft = Offset(it.left, it.top)) }
-                val path = Path()
-                map.route.forEachIndexed { i, o ->
-                    if (i == 0) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
+                // 각 종목 경로를 개별 선으로 그린다 (종목 간 연결선 없음)
+                map.routes.forEach { leg ->
+                    val path = Path()
+                    leg.forEachIndexed { i, o ->
+                        if (i == 0) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
+                    }
+                    drawPath(
+                        path = path,
+                        color = routeColor,
+                        style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+                    )
                 }
-                drawPath(
-                    path = path,
-                    color = routeColor,
-                    style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
-                )
             }
         }
     }
 }
 
 private class TileImg(val bmp: ImageBitmap, val left: Float, val top: Float)
-private class RouteMapData(val tiles: List<TileImg>, val route: List<Offset>)
+private class RouteMapData(val tiles: List<TileImg>, val routes: List<List<Offset>>)
 
 private fun worldX(lonDeg: Double, z: Int): Double =
     (lonDeg + 180.0) / 360.0 * TILE * (1 shl z)
@@ -99,7 +108,13 @@ private fun worldY(latDeg: Double, z: Int): Double {
     return y * TILE * (1 shl z)
 }
 
-private fun buildMap(context: Context, points: List<Pair<Double, Double>>, wPx: Int, hPx: Int): RouteMapData {
+private fun buildMap(
+    context: Context,
+    legs: List<List<Pair<Double, Double>>>,
+    points: List<Pair<Double, Double>>,
+    wPx: Int,
+    hPx: Int,
+): RouteMapData {
     val minLat = points.minOf { it.first }
     val maxLat = points.maxOf { it.first }
     val minLon = points.minOf { it.second }
@@ -119,8 +134,10 @@ private fun buildMap(context: Context, points: List<Pair<Double, Double>>, wPx: 
     val originX = worldX(minLon, zoom) - (wPx - routePxW) / 2.0
     val originY = worldY(maxLat, zoom) - (hPx - routePxH) / 2.0
 
-    val route = points.map { (lat, lon) ->
-        Offset((worldX(lon, zoom) - originX).toFloat(), (worldY(lat, zoom) - originY).toFloat())
+    val routes = legs.map { leg ->
+        leg.map { (lat, lon) ->
+            Offset((worldX(lon, zoom) - originX).toFloat(), (worldY(lat, zoom) - originY).toFloat())
+        }
     }
 
     val n = 1 shl zoom
@@ -142,7 +159,7 @@ private fun buildMap(context: Context, points: List<Pair<Double, Double>>, wPx: 
             tiles.add(TileImg(bmp, left, top))
         }
     }
-    return RouteMapData(tiles, route)
+    return RouteMapData(tiles, routes)
 }
 
 /** OSM 타일을 캐시에서 읽거나 없으면 내려받는다. */

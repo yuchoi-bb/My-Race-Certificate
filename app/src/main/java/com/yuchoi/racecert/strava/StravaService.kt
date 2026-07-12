@@ -127,13 +127,14 @@ object StravaService {
         }
         val info = sorted.joinToString("\n") { legLine(it) } + "\n🏁 합계 ${formatDuration(total)}"
         val distanceLabel = sorted.joinToString(" / ") { "%.1f".format(it.distanceKm) } + "km"
-        val longest = sorted.maxByOrNull { it.distanceKm }
+        // 선택된 모든 종목의 경로를 줄바꿈으로 이어 붙여 전체 지도를 그린다
+        val allRoutes = sorted.map { it.polyline }.filter { it.isNotBlank() }.joinToString("\n")
         return TriResult(
             startTime = first.startTime,
             totalSeconds = total,
             distanceLabel = distanceLabel,
             info = info,
-            polyline = longest?.polyline.orEmpty(),
+            polyline = allRoutes,
             startLat = first.startLat,
             startLng = first.startLng,
         )
@@ -225,7 +226,7 @@ object StravaService {
         else -> "%.1fkm".format(km)
     }
 
-    private fun sportEmoji(type: String): String = when {
+    fun sportEmoji(type: String): String = when {
         type.contains("Swim", ignoreCase = true) -> "🏊"
         type.contains("Ride", ignoreCase = true) || type.contains("Bike", ignoreCase = true) ||
             type.contains("Cycl", ignoreCase = true) -> "🚴"
@@ -233,7 +234,7 @@ object StravaService {
         else -> "🏅"
     }
 
-    private fun sportLabel(type: String): String = when {
+    fun sportLabel(type: String): String = when {
         type.contains("Swim", ignoreCase = true) -> "수영"
         type.contains("Ride", ignoreCase = true) || type.contains("Bike", ignoreCase = true) ||
             type.contains("Cycl", ignoreCase = true) -> "사이클"

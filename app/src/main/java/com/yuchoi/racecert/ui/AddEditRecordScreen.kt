@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -428,6 +429,49 @@ fun AddEditRecordScreen(
 
     // ── Strava에서 이 대회 날짜의 러닝 가져오기 ──
     var stravaFetching by remember { mutableStateOf(false) }
+    // 철인3종: 그 날 Strava 활동 중 선택 다이얼로그
+    var stravaPickerActivities by remember {
+        mutableStateOf<List<com.yuchoi.racecert.strava.StravaService.Run>>(emptyList())
+    }
+    val stravaSelected = remember { mutableStateListOf<Int>() }
+    var showStravaPicker by remember { mutableStateOf(false) }
+
+    // Strava 시작 좌표 + 시작~완주 시간대로 날씨를 다시 받아 덮어쓴다
+    suspend fun refreshWeather(lat: Double?, lng: Double?, startT: String, durationSec: Int) {
+        if (lat == null || lng == null || startT.isBlank()) return
+        val place = WeatherService.Place(
+            name = location.ifBlank { "대회 장소" }, displayName = "", lat = lat, lon = lng,
+        )
+        val wr = WeatherService.weatherAt(
+            place, date, startT,
+            com.yuchoi.racecert.strava.StravaService.formatDuration(durationSec),
+        )
+        if (wr is WeatherService.Result.Success) weather = wr.text
+    }
+
+    // 선택된 활동들을 합산해 기록에 반영 (전체 경로 포함)
+    fun applyStravaActivities(selected: List<com.yuchoi.racecert.strava.StravaService.Run>) {
+        if (selected.isEmpty()) return
+        scope.launch {
+            stravaFetching = true
+            val tri = com.yuchoi.racecert.strava.StravaService.combineTriathlon(selected)
+            recordTime = com.yuchoi.racecert.strava.StravaService.formatDuration(tri.totalSeconds)
+            distance = tri.distanceLabel
+            if (tri.startTime.isNotBlank()) {
+                startTime = tri.startTime
+                startTimeManuallySet = true
+            }
+            stravaInfo = tri.info
+            routePolyline = tri.polyline
+            refreshWeather(tri.startLat, tri.startLng, tri.startTime, tri.totalSeconds)
+            stravaFetching = false
+            Toast.makeText(
+                context,
+                "✅ Strava ${selected.size}개 종목 합산\n${tri.info}",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
 
     fun fetchFromStrava() {
         if (!com.yuchoi.racecert.strava.StravaAuth.hasClientSecret()) {
@@ -443,43 +487,16 @@ fun AddEditRecordScreen(
             Toast.makeText(context, "Strava 로그인·승인 후 다시 '가져오기'를 눌러 주세요.", Toast.LENGTH_LONG).show()
             return
         }
-        // Strava 시작 좌표 + 시작~완주 시간대로 날씨를 다시 받아 덮어쓴다
-        suspend fun refreshWeather(lat: Double?, lng: Double?, startT: String, durationSec: Int) {
-            if (lat == null || lng == null || startT.isBlank()) return
-            val place = WeatherService.Place(
-                name = location.ifBlank { "대회 장소" },
-                displayName = "",
-                lat = lat,
-                lon = lng,
-            )
-            val wr = WeatherService.weatherAt(
-                place, date, startT,
-                com.yuchoi.racecert.strava.StravaService.formatDuration(durationSec),
-            )
-            if (wr is WeatherService.Result.Success) weather = wr.text
-        }
-
         scope.launch {
             stravaFetching = true
             if (type == RaceType.TRIATHLON) {
-                // 철인3종: 그 날의 수영·바이크·러닝 등 모든 활동을 합산 매핑
+                // 철인3종: 그 날의 모든 활동을 목록으로 보여주고 사용자가 선택하게 한다
                 when (val m = com.yuchoi.racecert.strava.StravaService.activitiesOnDate(context, date)) {
                     is com.yuchoi.racecert.strava.StravaService.MultiResult.Success -> {
-                        val tri = com.yuchoi.racecert.strava.StravaService.combineTriathlon(m.activities)
-                        recordTime = com.yuchoi.racecert.strava.StravaService.formatDuration(tri.totalSeconds)
-                        distance = tri.distanceLabel
-                        if (tri.startTime.isNotBlank()) {
-                            startTime = tri.startTime
-                            startTimeManuallySet = true
-                        }
-                        stravaInfo = tri.info
-                        routePolyline = tri.polyline
-                        refreshWeather(tri.startLat, tri.startLng, tri.startTime, tri.totalSeconds)
-                        Toast.makeText(
-                            context,
-                            "✅ Strava 철인3종 ${m.activities.size}개 종목 합산\n${tri.info}",
-                            Toast.LENGTH_LONG,
-                        ).show()
+                        stravaPickerActivities = m.activities
+                        stravaSelected.clear()
+                        stravaSelected.addAll(m.activities.indices) // 기본 전체 선택
+                        showStravaPicker = true
                     }
                     com.yuchoi.racecert.strava.StravaService.MultiResult.NoSecret ->
                         Toast.makeText(context, "코드 1: Strava Client Secret 미설정.", Toast.LENGTH_LONG).show()
@@ -1141,6 +1158,65 @@ fun AddEditRecordScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { placeCandidates = emptyList() }) { Text("취소") }
+            },
+        )
+    }
+
+    if (showStravaPicker) {
+        AlertDialog(
+            onDismissRequest = { showStravaPicker = false },
+            title = { Text("가져올 Strava 활동 선택") },
+            text = {
+                Column {
+                    Text(
+                        "이 대회 날짜(${date.format(formatter)})의 활동이에요. 기록에 포함할 종목을 고르세요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    stravaPickerActivities.forEachIndexed { index, act ->
+                        val checked = index in stravaSelected
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                if (checked) stravaSelected.remove(index) else stravaSelected.add(index)
+                            },
+                        ) {
+                            Checkbox(
+                                checked = checked,
+                                onCheckedChange = {
+                                    if (it) stravaSelected.add(index) else stravaSelected.remove(index)
+                                },
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "${com.yuchoi.racecert.strava.StravaService.sportEmoji(act.sportType)} " +
+                                        "${com.yuchoi.racecert.strava.StravaService.sportLabel(act.sportType)} · " +
+                                        "%.2fkm".format(act.distanceKm),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Text(
+                                    "${act.startTime} · ${com.yuchoi.racecert.strava.StravaService.formatDuration(act.elapsedSeconds)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = stravaSelected.isNotEmpty(),
+                    onClick = {
+                        val chosen = stravaSelected.sorted().mapNotNull { stravaPickerActivities.getOrNull(it) }
+                        showStravaPicker = false
+                        applyStravaActivities(chosen)
+                    },
+                ) { Text("선택 합산") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStravaPicker = false }) { Text("취소") }
             },
         )
     }

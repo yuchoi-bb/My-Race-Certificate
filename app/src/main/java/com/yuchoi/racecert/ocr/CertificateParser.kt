@@ -109,6 +109,8 @@ object CertificateParser {
             .containsMatchIn(text) -> RaceType.TRIATHLON
         Regex("""granfondo|gran\s*fondo|그란폰도""", RegexOption.IGNORE_CASE)
             .containsMatchIn(text) -> RaceType.GRANFONDO
+        Regex("""trail|트레일""", RegexOption.IGNORE_CASE)
+            .containsMatchIn(text) -> RaceType.TRAILRUN
         Regex("""marathon|마라톤|\brun\b|running""", RegexOption.IGNORE_CASE)
             .containsMatchIn(text) -> RaceType.MARATHON
         else -> null

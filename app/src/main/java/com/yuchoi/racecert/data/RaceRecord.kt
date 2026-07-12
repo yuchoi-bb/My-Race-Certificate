@@ -6,6 +6,7 @@ enum class RaceType(val label: String) {
     MARATHON("마라톤"),
     TRIATHLON("철인3종"),
     GRANFONDO("그란폰도"),
+    TRAILRUN("트레일러닝"),
     OTHER("기타");
 
     companion object {

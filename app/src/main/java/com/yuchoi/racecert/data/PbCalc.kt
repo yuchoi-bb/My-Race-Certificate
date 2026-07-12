@@ -34,11 +34,38 @@ object PbCalc {
         }
     }
 
+    /** 마라톤 세부종목 선택지 (PB 기준) */
+    val MARATHON_SUBEVENTS = listOf("10K", "하프", "32K", "풀코스")
+
+    /** 실제 거리로 세부종목을 추정 (편집 화면 기본값 제안용). PB 계산에는 쓰지 않는다. */
+    fun suggestSubEvent(raw: String): String? {
+        val d = raw.trim().uppercase().replace(" ", "")
+        if (d.contains("하프") || d.contains("HALF")) return "하프"
+        if (d.contains("풀") || d.contains("FULL")) return "풀코스"
+        val km = Regex("""(\d{1,3}(?:\.\d+)?)""").find(d)?.value?.toDoubleOrNull() ?: return null
+        return when (km) {
+            in 9.0..11.9 -> "10K"
+            in 20.0..23.0 -> "하프"
+            in 30.0..34.0 -> "32K"
+            in 40.0..44.0 -> "풀코스"
+            else -> null
+        }
+    }
+
+    /**
+     * 종목별 PB 그룹 라벨.
+     * 마라톤은 사용자가 고른 세부종목(subEvent)으로만 잡고(미선택이면 PB 아님),
+     * 실제 거리는 PB에 반영하지 않는다. 그 외 종목은 정규화 거리로 묶는다.
+     */
+    private fun pbLabel(r: RaceRecord): String? =
+        if (r.type == RaceType.MARATHON) r.subEvent.ifBlank { null } else normalizeDistance(r.distance)
+
     /** 그룹별 PB 목록 (종목→기록순 정렬) */
     fun compute(records: List<RaceRecord>): List<PbEntry> =
         records.mapNotNull { r ->
             val sec = parseTimeSeconds(r.recordTime) ?: return@mapNotNull null
-            PbEntry(r.type, normalizeDistance(r.distance), sec, r)
+            val label = pbLabel(r) ?: return@mapNotNull null
+            PbEntry(r.type, label, sec, r)
         }
             .groupBy { it.type to it.distanceLabel }
             .map { (_, entries) -> entries.minBy { it.seconds } }

@@ -99,6 +99,10 @@ fun RecordDetailScreen(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AssistChip(onClick = {}, label = { Text(record.type.label) })
+                if (record.subEvent.isNotBlank()) {
+                    Spacer(Modifier.width(8.dp))
+                    AssistChip(onClick = {}, label = { Text(record.subEvent) })
+                }
                 Spacer(Modifier.width(12.dp))
                 Text(record.date.format(detailFormatter), style = MaterialTheme.typography.bodyLarge)
             }

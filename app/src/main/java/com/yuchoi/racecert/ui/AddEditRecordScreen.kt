@@ -56,6 +56,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -156,6 +157,13 @@ fun AddEditRecordScreen(
     var startTime by remember { mutableStateOf(existing?.startTime ?: "08:00") }
     var startTimeManuallySet by remember { mutableStateOf(existing != null) }
     var distance by remember { mutableStateOf(existing?.distance ?: "") }
+    // 마라톤 세부종목(PB 기준). 기존 선택이 없으면 실제 거리로 기본값만 제안.
+    var subEvent by remember {
+        mutableStateOf(
+            existing?.subEvent?.takeIf { it.isNotBlank() }
+                ?: com.yuchoi.racecert.data.PbCalc.suggestSubEvent(existing?.distance ?: "").orEmpty(),
+        )
+    }
     var bib by remember { mutableStateOf(existing?.bib ?: "") }
     var entryFee by remember { mutableStateOf(existing?.entryFee ?: "") }
     var eventFee by remember { mutableStateOf(existing?.eventFee ?: "") }
@@ -622,6 +630,7 @@ fun AddEditRecordScreen(
             eventNote = eventNote.trim(),
             bib = bib.trim(),
             startTime = startTime.trim(),
+            subEvent = if (type == RaceType.MARATHON) subEvent else "",
             mainImageIndex = mainImageIndex.coerceIn(0, (imagePaths.size - 1).coerceAtLeast(0)),
             bgImageIndex = bgImageIndex.coerceIn(0, (imagePaths.size - 1).coerceAtLeast(0)),
             stravaInfo = stravaInfo,
@@ -638,7 +647,7 @@ fun AddEditRecordScreen(
             bib.isNotBlank() || entryFee.isNotBlank() || eventFee.isNotBlank() ||
             eventNote.isNotBlank() || location.isNotBlank() || weather.isNotBlank() ||
             bodyInfo.isNotBlank() || memo.isNotBlank() || ocrText.isNotBlank() ||
-            startTimeManuallySet ||
+            startTimeManuallySet || subEvent.isNotBlank() ||
             imagePaths.isNotEmpty() || dateManuallySet || typeManuallySet
     } else {
         title.trim() != existing.title || recordTime.trim() != existing.recordTime ||
@@ -651,7 +660,8 @@ fun AddEditRecordScreen(
             date != existing.date || bodyDate != existing.bodyDate ||
             startTime.trim() != existing.startTime ||
             mainImageIndex != existing.mainImageIndex || bgImageIndex != existing.bgImageIndex ||
-            stravaInfo != existing.stravaInfo || routePolyline != existing.routePolyline
+            stravaInfo != existing.stravaInfo || routePolyline != existing.routePolyline ||
+            subEvent != existing.subEvent
     }
 
     fun attemptBack() {
@@ -912,10 +922,29 @@ fun AddEditRecordScreen(
             OutlinedTextField(
                 value = distance,
                 onValueChange = { distance = it },
-                label = { Text("거리 / 부문 (예: 10Km, 하프, 풀코스)") },
+                label = { Text("실제 거리 (예: 10.2Km · 기록용, PB엔 미반영)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            // 마라톤: 세부종목 선택 (PB는 이 선택으로만 잡힘)
+            if (type == RaceType.MARATHON) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "세부종목 (PB 기준)",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.yuchoi.racecert.data.PbCalc.MARATHON_SUBEVENTS.forEach { opt ->
+                        FilterChip(
+                            selected = subEvent == opt,
+                            onClick = { subEvent = if (subEvent == opt) "" else opt },
+                            label = { Text(opt) },
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(12.dp))
 
             OutlinedTextField(

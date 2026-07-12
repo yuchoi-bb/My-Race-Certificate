@@ -36,6 +36,8 @@ data class RaceRecord(
     val eventNote: String = "",
     val bib: String = "",
     val startTime: String = "",
+    /** 마라톤 세부종목(10K·하프·32K·풀코스). PB는 이 선택으로만 잡는다. 실제 거리와 별개. */
+    val subEvent: String = "",
     /** 카드 대표(썸네일) 이미지로 쓸 사진의 인덱스 */
     val mainImageIndex: Int = 0,
     /** 카드 배경으로 깔 사진의 인덱스 (대표와 다르게 지정 가능) */

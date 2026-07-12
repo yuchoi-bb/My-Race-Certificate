@@ -170,6 +170,7 @@ object RecordStore {
                         eventNote = obj.optString("eventNote"),
                         bib = obj.optString("bib"),
                         startTime = obj.optString("startTime"),
+                        subEvent = obj.optString("subEvent"),
                         mainImageIndex = obj.optInt("mainImageIndex"),
                         bgImageIndex = obj.optInt("bgImageIndex"),
                         stravaInfo = obj.optString("stravaInfo"),
@@ -203,6 +204,7 @@ object RecordStore {
             obj.put("eventNote", record.eventNote)
             obj.put("bib", record.bib)
             obj.put("startTime", record.startTime)
+            obj.put("subEvent", record.subEvent)
             obj.put("mainImageIndex", record.mainImageIndex)
             obj.put("bgImageIndex", record.bgImageIndex)
             obj.put("stravaInfo", record.stravaInfo)

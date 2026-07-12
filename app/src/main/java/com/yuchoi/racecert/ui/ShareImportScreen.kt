@@ -85,7 +85,8 @@ fun ShareImportScreen(
         if (working) return
         working = true
         scope.launch {
-            val paths = RecordStore.importImages(sharedUris)
+            val ordered = com.yuchoi.racecert.data.PhotoTime.sortByCaptureTime(context, sharedUris)
+            val paths = RecordStore.importImages(ordered)
             if (paths.isEmpty()) {
                 working = false
                 Toast.makeText(context, "사진을 가져오지 못했어요.", Toast.LENGTH_LONG).show()
@@ -107,7 +108,8 @@ fun ShareImportScreen(
         if (working) return
         working = true
         scope.launch {
-            val paths = RecordStore.importImages(sharedUris)
+            val ordered = com.yuchoi.racecert.data.PhotoTime.sortByCaptureTime(context, sharedUris)
+            val paths = RecordStore.importImages(ordered)
             val id = RecordStore.newId()
             RecordStore.upsert(
                 RaceRecord(

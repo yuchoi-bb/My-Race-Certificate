@@ -266,7 +266,9 @@ fun AddEditRecordScreen(
         }
         val toImport = uris.take(remaining)
         scope.launch {
-            val newPaths = RecordStore.importImages(toImport)
+            // 새로 추가하는 사진들만 촬영 시간순으로 정렬 (기존 사진 순서는 그대로 유지하고 뒤에 이어 붙임)
+            val ordered = com.yuchoi.racecert.data.PhotoTime.sortByCaptureTime(context, toImport)
+            val newPaths = RecordStore.importImages(ordered)
             imagePaths.addAll(newPaths)
             if (uris.size > remaining) {
                 Toast.makeText(

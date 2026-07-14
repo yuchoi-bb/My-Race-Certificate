@@ -3,28 +3,33 @@ package com.yuchoi.racecert.health
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.BasalMetabolicRateRecord
 import androidx.health.connect.client.records.BodyFatRecord
+import androidx.health.connect.client.records.LeanBodyMassRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.abs
 
 /**
- * 헬스커넥트에서 대회일 무렵의 몸무게·체지방을 읽어온다.
+ * 헬스커넥트에서 대회일 무렵의 몸 상태(몸무게·체지방·제지방량·기초대사량)를 읽어온다.
  *
- * 가민커넥트/삼성헬스 등이 헬스커넥트로 보내둔 데이터를 우리 앱이 읽는 구조다.
+ * InBody/가민커넥트/삼성헬스 등이 헬스커넥트로 보내둔 데이터를 우리 앱이 읽는 구조다.
  * (다른 앱의 데이터를 직접 읽는 공식 통로는 없고, 헬스커넥트가 표준 다리 역할)
  *
  * 어디서 막히는지 눈으로 확인할 수 있도록 각 단계에 숫자 코드를 둔다.
  */
 object HealthConnectBody {
 
-    /** 몸무게·체지방 읽기 권한 묶음 */
+    /** 몸 상태 읽기 권한 묶음 */
     val PERMISSIONS: Set<String> = setOf(
         HealthPermission.getReadPermission(WeightRecord::class),
         HealthPermission.getReadPermission(BodyFatRecord::class),
+        HealthPermission.getReadPermission(LeanBodyMassRecord::class),
+        HealthPermission.getReadPermission(BasalMetabolicRateRecord::class),
     )
 
     /**
@@ -49,34 +54,46 @@ object HealthConnectBody {
     data class BodyReading(
         val weightKg: Double?,
         val bodyFatPct: Double?,
+        val leanKg: Double?,        // 제지방량(근육 관련)
+        val bmrKcal: Double?,       // 기초대사량 (kcal/day)
         val date: LocalDate?,
     ) {
-        val isEmpty: Boolean get() = weightKg == null && bodyFatPct == null
+        val isEmpty: Boolean
+            get() = weightKg == null && bodyFatPct == null && leanKg == null && bmrKcal == null
     }
 
     /**
-     * 대회일 ±[windowDays]일 범위에서 대회일에 가장 가까운 몸무게/체지방을 읽어온다.
+     * 대회 전 ~ 대회일까지 범위에서 대회일에 가장 가까운 몸 상태를 읽어온다.
+     * (대회를 마친 이후 측정값은 제외)
      */
     suspend fun readNear(context: Context, raceDate: LocalDate, windowDays: Long = 14): BodyReading {
         val zone = ZoneId.systemDefault()
-        // 대회 마친 이후(대회일 다음날부터) 데이터는 가져오지 않는다. 대회 전 ~ 대회일까지만.
         val start = raceDate.minusDays(windowDays).atStartOfDay(zone).toInstant()
         val end = raceDate.plusDays(1).atStartOfDay(zone).toInstant()
         val filter = TimeRangeFilter.between(start, end)
         val c = client(context)
 
-        val weights = c.readRecords(ReadRecordsRequest(WeightRecord::class, filter)).records
-        val fats = c.readRecords(ReadRecordsRequest(BodyFatRecord::class, filter)).records
+        fun nearestDate(t: Instant) = abs(t.atZone(zone).toLocalDate().toEpochDay() - raceDate.toEpochDay())
 
-        fun daysFrom(epochDay: Long) = abs(epochDay - raceDate.toEpochDay())
+        val w = c.readRecords(ReadRecordsRequest(WeightRecord::class, filter)).records
+            .minByOrNull { nearestDate(it.time) }
+        val f = c.readRecords(ReadRecordsRequest(BodyFatRecord::class, filter)).records
+            .minByOrNull { nearestDate(it.time) }
+        val lean = c.readRecords(ReadRecordsRequest(LeanBodyMassRecord::class, filter)).records
+            .minByOrNull { nearestDate(it.time) }
+        val bmr = c.readRecords(ReadRecordsRequest(BasalMetabolicRateRecord::class, filter)).records
+            .minByOrNull { nearestDate(it.time) }
 
-        val w = weights.minByOrNull { daysFrom(it.time.atZone(zone).toLocalDate().toEpochDay()) }
-        val f = fats.minByOrNull { daysFrom(it.time.atZone(zone).toLocalDate().toEpochDay()) }
+        val date = listOfNotNull(w?.time, f?.time, lean?.time, bmr?.time)
+            .minByOrNull { nearestDate(it) }
+            ?.atZone(zone)?.toLocalDate()
 
         return BodyReading(
             weightKg = w?.weight?.inKilograms,
             bodyFatPct = f?.percentage?.value,
-            date = w?.time?.atZone(zone)?.toLocalDate() ?: f?.time?.atZone(zone)?.toLocalDate(),
+            leanKg = lean?.mass?.inKilograms,
+            bmrKcal = bmr?.basalMetabolicRate?.inKilocaloriesPerDay,
+            date = date,
         )
     }
 }

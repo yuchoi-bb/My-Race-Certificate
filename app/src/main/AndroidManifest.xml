@@ -9,9 +9,11 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-    <!-- 헬스커넥트: 몸무게·체지방 읽기 (가민/삼성헬스가 넣어둔 값) -->
+    <!-- 헬스커넥트: 몸무게·체지방·제지방량·기초대사량 읽기 (InBody/가민/삼성헬스가 넣어둔 값) -->
     <uses-permission android:name="android.permission.health.READ_WEIGHT" />
     <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+    <uses-permission android:name="android.permission.health.READ_LEAN_BODY_MASS" />
+    <uses-permission android:name="android.permission.health.READ_BASAL_METABOLIC_RATE" />
 
     <!-- 헬스커넥트 앱(제공자) 존재 확인용 패키지 가시성 (API < 34) -->
     <queries>

@@ -392,6 +392,8 @@ fun AddEditRecordScreen(
         val parts = mutableListOf<String>()
         r.weightKg?.let { parts += "%.1fkg".format(it) }
         r.bodyFatPct?.let { parts += "체지방 %.1f%%".format(it) }
+        r.leanKg?.let { parts += "제지방량 %.1fkg".format(it) }
+        r.bmrKcal?.let { parts += "기초대사 %.0fkcal".format(it) }
         bodyInfo = parts.joinToString(", ")
         r.date?.let { bodyDate = it }
         toast("코드 6: 가져왔어요 → $bodyInfo" + (r.date?.let { " (측정일 ${it.format(formatter)})" } ?: ""))

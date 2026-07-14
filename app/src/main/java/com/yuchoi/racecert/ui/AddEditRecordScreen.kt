@@ -43,6 +43,8 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.RotateRight
@@ -87,6 +89,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Image as ForegroundImage
 import com.yuchoi.racecert.data.RaceRecord
@@ -185,6 +188,12 @@ fun AddEditRecordScreen(
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showBodyDatePicker by remember { mutableStateOf(false) }
+    // 부가 항목 접기/펼치기 (값이 있으면 기본 펼침)
+    var feesExpanded by remember {
+        mutableStateOf(existing?.entryFee?.isNotBlank() == true || existing?.eventFee?.isNotBlank() == true)
+    }
+    var bodyExpanded by remember { mutableStateOf(existing?.bodyInfo?.isNotBlank() == true) }
+    var ocrExpanded by remember { mutableStateOf(false) }
     var typeExpanded by remember { mutableStateOf(false) }
     var ocrRunning by remember { mutableStateOf(false) }
     // OCR가 날짜/종목을 함부로 덮어쓰지 않도록, 사용자가 직접 만졌는지 추적
@@ -691,6 +700,7 @@ fun AddEditRecordScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
         ) {
+            SectionHeader("기본 정보")
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
@@ -724,6 +734,25 @@ fun AddEditRecordScreen(
                                 typeManuallySet = true
                                 typeExpanded = false
                             },
+                        )
+                    }
+                }
+            }
+            // 마라톤: 세부종목 선택 (PB는 이 선택으로만 잡힘)
+            if (type == RaceType.MARATHON) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "세부종목 (PB 기준)",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.yuchoi.racecert.data.PbCalc.MARATHON_SUBEVENTS.forEach { opt ->
+                        FilterChip(
+                            selected = subEvent == opt,
+                            onClick = { subEvent = if (subEvent == opt) "" else opt },
+                            label = { Text(opt) },
                         )
                     }
                 }
@@ -889,14 +918,7 @@ fun AddEditRecordScreen(
             }
             Spacer(Modifier.height(16.dp))
 
-            OutlinedTextField(
-                value = recordTime,
-                onValueChange = { recordTime = it },
-                label = { Text("기록 (완주 시간, 예: 00:44:16 · 예정 대회는 비워두세요)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(8.dp))
+            SectionHeader("기록")
             OutlinedButton(
                 onClick = { fetchFromStrava() },
                 enabled = !stravaFetching,
@@ -908,56 +930,50 @@ fun AddEditRecordScreen(
                     Icon(Icons.Filled.AutoAwesome, contentDescription = null)
                 }
                 Spacer(Modifier.width(8.dp))
-                Text("Strava에서 이 대회 날짜 러닝 가져오기")
+                Text("Strava에서 기록 가져오기")
             }
             Spacer(Modifier.height(12.dp))
 
-            OutlinedTextField(
-                value = startTime,
-                onValueChange = { startTime = it; startTimeManuallySet = true },
-                label = { Text("대회 시작 시간 (기본 08:00 · 서울이면 07:30)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Row {
+                OutlinedTextField(
+                    value = recordTime,
+                    onValueChange = { recordTime = it },
+                    label = { Text("완주 기록") },
+                    placeholder = { Text("00:44:16") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                OutlinedTextField(
+                    value = startTime,
+                    onValueChange = { startTime = it; startTimeManuallySet = true },
+                    label = { Text("시작 시간") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+            }
             Spacer(Modifier.height(12.dp))
 
             OutlinedTextField(
                 value = distance,
                 onValueChange = { distance = it },
-                label = { Text("실제 거리 (예: 10.2Km · 기록용, PB엔 미반영)") },
+                label = { Text("실제 거리 (기록용, PB엔 미반영)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            // 마라톤: 세부종목 선택 (PB는 이 선택으로만 잡힘)
-            if (type == RaceType.MARATHON) {
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    "세부종목 (PB 기준)",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    com.yuchoi.racecert.data.PbCalc.MARATHON_SUBEVENTS.forEach { opt ->
-                        FilterChip(
-                            selected = subEvent == opt,
-                            onClick = { subEvent = if (subEvent == opt) "" else opt },
-                            label = { Text(opt) },
-                        )
-                    }
-                }
-            }
             Spacer(Modifier.height(12.dp))
 
             OutlinedTextField(
                 value = bib,
                 onValueChange = { bib = it },
-                label = { Text("배번호 (사진에서 자동 인식, 예: 11000)") },
+                label = { Text("배번호 (사진에서 자동 인식)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
 
+            CollapsibleHeader("참가비 · 이벤트 (선택)", feesExpanded) { feesExpanded = !feesExpanded }
+            if (feesExpanded) {
             OutlinedTextField(
                 value = entryFee,
                 onValueChange = { entryFee = it },
@@ -996,8 +1012,9 @@ fun AddEditRecordScreen(
                     )
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            }
 
+            SectionHeader("장소 · 날씨")
             OutlinedTextField(
                 value = location,
                 onValueChange = { location = it },
@@ -1027,8 +1044,10 @@ fun AddEditRecordScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
 
+            CollapsibleHeader("몸 상태 (선택)", bodyExpanded) { bodyExpanded = !bodyExpanded }
+            if (bodyExpanded) {
             OutlinedTextField(
                 value = bodyInfo,
                 onValueChange = { bodyInfo = it },
@@ -1068,8 +1087,9 @@ fun AddEditRecordScreen(
                 } ?: "몸 상태 측정일 선택 (대회일 기준 -N/+N일 표시)"
                 Text(label)
             }
-            Spacer(Modifier.height(16.dp))
+            }
 
+            SectionHeader("메모")
             OutlinedTextField(
                 value = memo,
                 onValueChange = { memo = it },
@@ -1078,12 +1098,15 @@ fun AddEditRecordScreen(
             )
             Spacer(Modifier.height(16.dp))
 
-            OutlinedTextField(
-                value = ocrText,
-                onValueChange = { ocrText = it },
-                label = { Text("OCR 인식 원문 (자유롭게 수정 가능)") },
-                modifier = Modifier.fillMaxWidth().height(120.dp),
-            )
+            CollapsibleHeader("OCR 인식 원문 (고급)", ocrExpanded) { ocrExpanded = !ocrExpanded }
+            if (ocrExpanded) {
+                OutlinedTextField(
+                    value = ocrText,
+                    onValueChange = { ocrText = it },
+                    label = { Text("OCR 인식 원문 (자유롭게 수정 가능)") },
+                    modifier = Modifier.fillMaxWidth().height(120.dp),
+                )
+            }
             Spacer(Modifier.height(24.dp))
 
             Button(
@@ -1481,6 +1504,40 @@ fun AddEditRecordScreen(
         ) {
             DatePicker(state = state)
         }
+    }
+}
+
+/** 폼 섹션 제목 */
+@Composable
+private fun SectionHeader(text: String) {
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+    )
+    Spacer(Modifier.height(8.dp))
+}
+
+/** 접을 수 있는 섹션 헤더 (탭하면 펼침/접힘) */
+@Composable
+private fun CollapsibleHeader(title: String, expanded: Boolean, onToggle: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+            contentDescription = if (expanded) "접기" else "펼치기",
+        )
     }
 }
 

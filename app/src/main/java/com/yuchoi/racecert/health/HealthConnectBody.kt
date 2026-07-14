@@ -59,8 +59,9 @@ object HealthConnectBody {
      */
     suspend fun readNear(context: Context, raceDate: LocalDate, windowDays: Long = 14): BodyReading {
         val zone = ZoneId.systemDefault()
+        // 대회 마친 이후(대회일 다음날부터) 데이터는 가져오지 않는다. 대회 전 ~ 대회일까지만.
         val start = raceDate.minusDays(windowDays).atStartOfDay(zone).toInstant()
-        val end = raceDate.plusDays(windowDays + 1).atStartOfDay(zone).toInstant()
+        val end = raceDate.plusDays(1).atStartOfDay(zone).toInstant()
         val filter = TimeRangeFilter.between(start, end)
         val c = client(context)
 

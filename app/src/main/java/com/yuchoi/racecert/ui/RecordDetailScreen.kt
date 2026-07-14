@@ -136,13 +136,23 @@ fun RecordDetailScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (record.location.isNotBlank() || record.weather.isNotBlank() ||
+            // 기존 정보 + Strava 상세를 하나의 카드로 합치고 중복(완주 합계 등)은 제거
+            // recordTime을 위에서 이미 크게 보여주므로 Strava 요약의 "🏁 합계" 줄은 뺀다.
+            val stravaDetail = record.stravaInfo.lineSequence()
+                .filter { it.isNotBlank() && !it.trimStart().startsWith("🏁") }
+                .joinToString("\n")
+            val hasInfo = record.location.isNotBlank() || record.weather.isNotBlank() ||
                 record.bodyInfo.isNotBlank() || record.entryFee.isNotBlank() ||
-                record.eventFee.isNotBlank() || record.bib.isNotBlank()
-            ) {
+                record.eventFee.isNotBlank() || record.bib.isNotBlank() ||
+                stravaDetail.isNotBlank() || record.routePolyline.isNotBlank()
+            if (hasInfo) {
                 Spacer(Modifier.height(12.dp))
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        if (stravaDetail.isNotBlank()) {
+                            Text(stravaDetail, style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(6.dp))
+                        }
                         if (record.bib.isNotBlank()) {
                             Text("🎽 배번 ${record.bib}", style = MaterialTheme.typography.bodyMedium)
                             Spacer(Modifier.height(4.dp))
@@ -180,27 +190,10 @@ fun RecordDetailScreen(
                             val text = if (offset.isBlank()) "⚖️ ${record.bodyInfo}"
                             else "⚖️ ${record.bodyInfo}  ($offset)"
                             Text(text, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-                }
-            }
-
-            // Strava에서 가져온 상세 기록 + 코스 경로
-            if (record.stravaInfo.isNotBlank() || record.routePolyline.isNotBlank()) {
-                Spacer(Modifier.height(12.dp))
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            "Strava 기록",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        if (record.stravaInfo.isNotBlank()) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(record.stravaInfo, style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(4.dp))
                         }
                         if (record.routePolyline.isNotBlank()) {
-                            Spacer(Modifier.height(12.dp))
+                            Spacer(Modifier.height(6.dp))
                             Text(
                                 "코스",
                                 style = MaterialTheme.typography.labelMedium,
@@ -209,9 +202,7 @@ fun RecordDetailScreen(
                             Spacer(Modifier.height(4.dp))
                             RouteMap(
                                 polyline = record.routePolyline,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(200.dp),
+                                modifier = Modifier.fillMaxWidth().height(200.dp),
                             )
                         }
                     }

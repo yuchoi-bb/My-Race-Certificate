@@ -18,7 +18,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -110,6 +114,9 @@ fun BodyGraphScreen(bottomBar: @Composable () -> Unit) {
             TopAppBar(
                 title = { Text("몸 상태 그래프") },
                 actions = {
+                    IconButton(onClick = { refresh++ }) {
+                        Icon(Icons.Filled.Refresh, contentDescription = "새로고침")
+                    }
                     Text(
                         text = "v${BuildConfig.VERSION_NAME}",
                         style = MaterialTheme.typography.labelSmall,

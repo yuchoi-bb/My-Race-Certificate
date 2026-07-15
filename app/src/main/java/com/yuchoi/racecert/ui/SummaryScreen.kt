@@ -101,10 +101,12 @@ fun SummaryScreen(
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
+            val count = RecordStore.records.size
             val ok = BackupManager.export(context, uri)
             Toast.makeText(
                 context,
-                if (ok) "백업을 저장했어요. Google Drive 등에서 확인하세요." else "백업 저장에 실패했어요.",
+                if (ok) "백업을 저장했어요 (기록 ${count}개). Google Drive 등에서 확인하세요."
+                else "백업 저장에 실패했어요.",
                 Toast.LENGTH_LONG,
             ).show()
         }
@@ -387,7 +389,17 @@ fun SummaryScreen(
                         )
                         Spacer(Modifier.height(12.dp))
                         Button(
-                            onClick = { exportLauncher.launch(BackupManager.suggestedFileName()) },
+                            onClick = {
+                                if (RecordStore.records.isEmpty()) {
+                                    Toast.makeText(
+                                        context,
+                                        "백업할 기록이 없어요. 먼저 대회 기록을 추가해 주세요.",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                } else {
+                                    exportLauncher.launch(BackupManager.suggestedFileName())
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text("☁️ 백업 저장 (Google Drive 등)") }
                         Spacer(Modifier.height(8.dp))

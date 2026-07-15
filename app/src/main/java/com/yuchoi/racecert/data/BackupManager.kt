@@ -56,8 +56,14 @@ object BackupManager {
             return@withContext ImportResult.NotAZip
         }
         try {
-            if (readZip(context, ByteArrayInputStream(bytes))) ImportResult.Success
-            else ImportResult.NoRecords
+            if (readZip(context, ByteArrayInputStream(bytes))) {
+                // 복원한 데이터를 '가장 최신'으로 표시해, 이후 Drive 자동 동기화가
+                // 예전 Drive 데이터로 되돌려 덮어쓰지 않도록 한다 (다음 동기화 때 업로드됨).
+                RecordStore.setLocalUpdatedAt(System.currentTimeMillis())
+                ImportResult.Success
+            } else {
+                ImportResult.NoRecords
+            }
         } catch (_: java.util.zip.ZipException) {
             ImportResult.NotAZip
         } catch (_: Exception) {

@@ -6,6 +6,7 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.BasalMetabolicRateRecord
 import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.LeanBodyMassRecord
+import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
@@ -13,6 +14,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.abs
+import kotlin.reflect.KClass
 
 /**
  * 헬스커넥트에서 대회일 무렵의 몸 상태(몸무게·체지방·제지방량·기초대사량)를 읽어온다.
@@ -76,24 +78,40 @@ object HealthConnectBody {
             get() = weight.isEmpty() && bodyFat.isEmpty() && lean.isEmpty() && bmr.isEmpty()
     }
 
-    /** 최근 [sinceDays]일간의 몸 상태 이력을 지표별 시계열로 읽어온다. */
+    /** 최근 [sinceDays]일간의 몸 상태 이력을 지표별 시계열로 읽어온다. (페이징으로 전체 조회) */
     suspend fun readHistory(context: Context, sinceDays: Long = 180): BodyHistory {
         val end = Instant.now()
         val start = end.minus(java.time.Duration.ofDays(sinceDays))
         val filter = TimeRangeFilter.between(start, end)
         val c = client(context)
 
-        val weight = c.readRecords(ReadRecordsRequest(WeightRecord::class, filter)).records
-            .map { Point(it.time.toEpochMilli(), it.weight.inKilograms) }.sortedBy { it.timeMs }
-        val bodyFat = c.readRecords(ReadRecordsRequest(BodyFatRecord::class, filter)).records
-            .map { Point(it.time.toEpochMilli(), it.percentage.value) }.sortedBy { it.timeMs }
-        val lean = c.readRecords(ReadRecordsRequest(LeanBodyMassRecord::class, filter)).records
-            .map { Point(it.time.toEpochMilli(), it.mass.inKilograms) }.sortedBy { it.timeMs }
-        val bmr = c.readRecords(ReadRecordsRequest(BasalMetabolicRateRecord::class, filter)).records
-            .map { Point(it.time.toEpochMilli(), it.basalMetabolicRate.inKilocaloriesPerDay) }
-            .sortedBy { it.timeMs }
+        return BodyHistory(
+            weight = readSeries(c, WeightRecord::class, filter) { it.time.toEpochMilli() to it.weight.inKilograms },
+            bodyFat = readSeries(c, BodyFatRecord::class, filter) { it.time.toEpochMilli() to it.percentage.value },
+            lean = readSeries(c, LeanBodyMassRecord::class, filter) { it.time.toEpochMilli() to it.mass.inKilograms },
+            bmr = readSeries(c, BasalMetabolicRateRecord::class, filter) {
+                it.time.toEpochMilli() to it.basalMetabolicRate.inKilocaloriesPerDay
+            },
+        )
+    }
 
-        return BodyHistory(weight, bodyFat, lean, bmr)
+    /** 한 종류의 레코드를 페이지 끝까지 모두 읽어 (시각·값) 시계열로 만든다. */
+    private suspend fun <T : Record> readSeries(
+        c: HealthConnectClient,
+        type: KClass<T>,
+        filter: TimeRangeFilter,
+        sel: (T) -> Pair<Long, Double>,
+    ): List<Point> {
+        val out = ArrayList<Point>()
+        var token: String? = null
+        do {
+            val resp = c.readRecords(
+                ReadRecordsRequest(recordType = type, timeRangeFilter = filter, pageToken = token),
+            )
+            resp.records.forEach { val (t, v) = sel(it); out.add(Point(t, v)) }
+            token = resp.pageToken
+        } while (token != null)
+        return out.sortedBy { it.timeMs }
     }
 
     /**

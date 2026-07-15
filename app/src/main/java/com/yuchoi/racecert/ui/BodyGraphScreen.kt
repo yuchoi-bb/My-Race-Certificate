@@ -2,6 +2,8 @@ package com.yuchoi.racecert.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -71,7 +73,7 @@ private data class MetricSpec(
 @Composable
 fun BodyGraphScreen(bottomBar: @Composable () -> Unit) {
     val context = LocalContext.current
-    var periodDays by remember { mutableLongStateOf(180L) }
+    var periodDays by remember { mutableLongStateOf(365L) }
     var refresh by remember { mutableIntStateOf(0) }
 
     val permLauncher = rememberLauncherForActivityResult(
@@ -130,8 +132,13 @@ fun BodyGraphScreen(bottomBar: @Composable () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(90L to "3개월", 180L to "6개월", 365L to "1년").forEach { (days, label) ->
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf(
+                        90L to "3개월", 365L to "1년", 1095L to "3년", 3650L to "10년", 36500L to "전체",
+                    ).forEach { (days, label) ->
                         FilterChip(
                             selected = periodDays == days,
                             onClick = { periodDays = days },

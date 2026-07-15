@@ -62,6 +62,40 @@ object HealthConnectBody {
             get() = weightKg == null && bodyFatPct == null && leanKg == null && bmrKcal == null
     }
 
+    /** 그래프용 한 점 (측정 시각 · 값) */
+    data class Point(val timeMs: Long, val value: Double)
+
+    /** 기간 내 몸 상태 이력 (지표별 시계열) */
+    data class BodyHistory(
+        val weight: List<Point>,
+        val bodyFat: List<Point>,
+        val lean: List<Point>,
+        val bmr: List<Point>,
+    ) {
+        val isEmpty: Boolean
+            get() = weight.isEmpty() && bodyFat.isEmpty() && lean.isEmpty() && bmr.isEmpty()
+    }
+
+    /** 최근 [sinceDays]일간의 몸 상태 이력을 지표별 시계열로 읽어온다. */
+    suspend fun readHistory(context: Context, sinceDays: Long = 180): BodyHistory {
+        val end = Instant.now()
+        val start = end.minus(java.time.Duration.ofDays(sinceDays))
+        val filter = TimeRangeFilter.between(start, end)
+        val c = client(context)
+
+        val weight = c.readRecords(ReadRecordsRequest(WeightRecord::class, filter)).records
+            .map { Point(it.time.toEpochMilli(), it.weight.inKilograms) }.sortedBy { it.timeMs }
+        val bodyFat = c.readRecords(ReadRecordsRequest(BodyFatRecord::class, filter)).records
+            .map { Point(it.time.toEpochMilli(), it.percentage.value) }.sortedBy { it.timeMs }
+        val lean = c.readRecords(ReadRecordsRequest(LeanBodyMassRecord::class, filter)).records
+            .map { Point(it.time.toEpochMilli(), it.mass.inKilograms) }.sortedBy { it.timeMs }
+        val bmr = c.readRecords(ReadRecordsRequest(BasalMetabolicRateRecord::class, filter)).records
+            .map { Point(it.time.toEpochMilli(), it.basalMetabolicRate.inKilocaloriesPerDay) }
+            .sortedBy { it.timeMs }
+
+        return BodyHistory(weight, bodyFat, lean, bmr)
+    }
+
     /**
      * 대회 전 ~ 대회일까지 범위에서 대회일에 가장 가까운 몸 상태를 읽어온다.
      * (대회를 마친 이후 측정값은 제외)

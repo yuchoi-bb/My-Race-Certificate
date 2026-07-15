@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -27,6 +28,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.yuchoi.racecert.data.RecordStore
 import com.yuchoi.racecert.ui.AddEditRecordScreen
+import com.yuchoi.racecert.ui.BodyGraphScreen
 import com.yuchoi.racecert.ui.RecordDetailScreen
 import com.yuchoi.racecert.ui.RecordListScreen
 import com.yuchoi.racecert.ui.ShareImportScreen
@@ -148,10 +150,16 @@ private fun App(
                         icon = { Icon(Icons.Filled.BarChart, contentDescription = null) },
                         label = { Text("요약 · PB") },
                     )
+                    NavigationBarItem(
+                        selected = homeTab == 2,
+                        onClick = { homeTab = 2 },
+                        icon = { Icon(Icons.Filled.MonitorHeart, contentDescription = null) },
+                        label = { Text("몸 상태") },
+                    )
                 }
             }
-            if (homeTab == 0) {
-                RecordListScreen(
+            when (homeTab) {
+                0 -> RecordListScreen(
                     onAddRecord = { screen = Screen.AddEdit(null) },
                     onOpenRecord = { screen = Screen.Detail(it) },
                     onCheckUpdate = { scope.launch { checkForUpdate(manual = true) } },
@@ -159,12 +167,17 @@ private fun App(
                     scrollToId = scrollToId,
                     onScrolled = { scrollToId = null },
                 )
-            } else {
-                BackHandler { homeTab = 0 }
-                SummaryScreen(
-                    bottomBar = bottomBar,
-                    onOpenRecord = { screen = Screen.Detail(it) },
-                )
+                1 -> {
+                    BackHandler { homeTab = 0 }
+                    SummaryScreen(
+                        bottomBar = bottomBar,
+                        onOpenRecord = { screen = Screen.Detail(it) },
+                    )
+                }
+                else -> {
+                    BackHandler { homeTab = 0 }
+                    BodyGraphScreen(bottomBar = bottomBar)
+                }
             }
         }
 

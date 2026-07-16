@@ -78,6 +78,6 @@ data class RaceRecord(
         }
 
     companion object {
-        const val MAX_IMAGES = 20
+        const val MAX_IMAGES = 100
     }
 }

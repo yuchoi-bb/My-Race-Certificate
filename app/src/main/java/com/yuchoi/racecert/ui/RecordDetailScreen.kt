@@ -217,9 +217,11 @@ fun RecordDetailScreen(
                 var selected by remember(record.id) { mutableStateOf(0) }
                 val mainPath = record.imagePaths.getOrElse(selected) { record.imagePaths.first() }
                 val bitmap = rememberSampledBitmap(mainPath, reqSizePx = 1440)
+                // 어떤 사진을 골라도 같은 크기 틀 안에 표시 (사진마다 화면이 널뛰지 않게 고정)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .height(440.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center,
@@ -228,11 +230,9 @@ fun RecordDetailScreen(
                         ForegroundImage(
                             bitmap = bitmap,
                             contentDescription = null,
-                            contentScale = ContentScale.FillWidth,
-                            modifier = Modifier.fillMaxWidth(),
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize(),
                         )
-                    } else {
-                        Box(modifier = Modifier.fillMaxWidth().height(200.dp))
                     }
                 }
 

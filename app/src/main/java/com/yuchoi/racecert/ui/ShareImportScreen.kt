@@ -87,6 +87,8 @@ fun ShareImportScreen(
         scope.launch {
             val ordered = com.yuchoi.racecert.data.PhotoTime.sortByCaptureTime(context, sharedUris)
             val paths = RecordStore.importImages(ordered)
+            // 기존 기록에 붙이는 사진은 기록증이 아니므로 모두 축소 저장
+            paths.forEach { com.yuchoi.racecert.data.ImageCompressor.compressInPlace(it) }
             if (paths.isEmpty()) {
                 working = false
                 Toast.makeText(context, "사진을 가져오지 못했어요.", Toast.LENGTH_LONG).show()
@@ -110,6 +112,10 @@ fun ShareImportScreen(
         scope.launch {
             val ordered = com.yuchoi.racecert.data.PhotoTime.sortByCaptureTime(context, sharedUris)
             val paths = RecordStore.importImages(ordered)
+            // 첫 사진은 대표(기록증일 수 있음)로 원본 유지, 나머지는 축소 저장
+            paths.forEachIndexed { i, p ->
+                if (i > 0) com.yuchoi.racecert.data.ImageCompressor.compressInPlace(p)
+            }
             val id = RecordStore.newId()
             RecordStore.upsert(
                 RaceRecord(

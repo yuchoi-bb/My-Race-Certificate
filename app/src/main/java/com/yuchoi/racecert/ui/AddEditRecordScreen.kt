@@ -617,11 +617,21 @@ fun AddEditRecordScreen(
     }
 
     var showDiscardDialog by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
 
     fun doSave() {
         if (title.isBlank()) {
             Toast.makeText(context, "대회 이름을 입력해 주세요.", Toast.LENGTH_SHORT).show()
             return
+        }
+        if (saving) return
+        saving = true
+        scope.launch {
+        // 대표(기록증) 사진은 원본 화질 유지, 나머지 사진은 축소 저장해 용량을 줄인다.
+        // (OCR은 이미 원본으로 끝난 뒤라 인식 품질에는 영향 없음)
+        val keepOriginal = mainImageIndex.coerceIn(0, (imagePaths.size - 1).coerceAtLeast(0))
+        imagePaths.forEachIndexed { i, p ->
+            if (i != keepOriginal) com.yuchoi.racecert.data.ImageCompressor.compressInPlace(p)
         }
         val record = RaceRecord(
             id = existing?.id ?: RecordStore.newId(),
@@ -652,6 +662,7 @@ fun AddEditRecordScreen(
         RecordStore.upsert(record)
         com.yuchoi.racecert.sync.DriveSync.requestSync(context)
         onDone(record.id)
+        }
     }
 
     // 저장하지 않은 변경사항이 있는지
@@ -1113,10 +1124,16 @@ fun AddEditRecordScreen(
 
             Button(
                 onClick = { doSave() },
-                enabled = title.isNotBlank(),
+                enabled = title.isNotBlank() && !saving,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(if (date.isAfter(LocalDate.now())) "예정 대회 저장" else "저장")
+                if (saving) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("저장 중…")
+                } else {
+                    Text(if (date.isAfter(LocalDate.now())) "예정 대회 저장" else "저장")
+                }
             }
         }
     }

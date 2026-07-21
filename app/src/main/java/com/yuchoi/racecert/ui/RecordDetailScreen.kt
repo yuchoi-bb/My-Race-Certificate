@@ -32,11 +32,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -63,6 +66,7 @@ fun RecordDetailScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val record = remember(recordId, RecordStore.records.toList()) { RecordStore.find(recordId) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var tab by remember { mutableIntStateOf(0) }
 
     if (record == null) {
         // 이미 삭제된 경우: 컴포지션 이후 안전하게 뒤로 이동
@@ -90,10 +94,25 @@ fun RecordDetailScreen(
             )
         },
     ) { innerPadding ->
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            TabRow(selectedTabIndex = tab) {
+                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("정보") })
+                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("준비물") })
+            }
+            if (tab == 1) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                ) {
+                    GearChecklistTab(record = record, onUpdate = { RecordStore.upsert(it) })
+                }
+                return@Scaffold
+            }
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
         ) {
@@ -290,6 +309,7 @@ fun RecordDetailScreen(
                     }
                 }
             }
+        }
         }
     }
 

@@ -658,6 +658,10 @@ fun AddEditRecordScreen(
             bgImageIndex = bgImageIndex.coerceIn(0, (imagePaths.size - 1).coerceAtLeast(0)),
             stravaInfo = stravaInfo,
             routePolyline = routePolyline,
+            // 준비물 체크리스트는 이 화면에서 다루지 않으므로 기존 값을 그대로 이어받는다
+            // (안 넘기면 수정·저장할 때마다 체크리스트가 초기화돼 버림)
+            gearChecklist = existing?.gearChecklist ?: emptyList(),
+            gearInitialized = existing?.gearInitialized ?: false,
         )
         RecordStore.upsert(record)
         com.yuchoi.racecert.sync.DriveSync.requestSync(context)

@@ -175,6 +175,18 @@ object RecordStore {
                         bgImageIndex = obj.optInt("bgImageIndex"),
                         stravaInfo = obj.optString("stravaInfo"),
                         routePolyline = obj.optString("routePolyline"),
+                        gearChecklist = (obj.optJSONArray("gearChecklist") ?: JSONArray()).let { arr ->
+                            (0 until arr.length()).map { idx ->
+                                val g = arr.getJSONObject(idx)
+                                GearItem(
+                                    id = g.optString("id").ifBlank { UUID.randomUUID().toString() },
+                                    section = g.optString("section"),
+                                    label = g.optString("label"),
+                                    checked = g.optBoolean("checked"),
+                                )
+                            }
+                        },
+                        gearInitialized = obj.optBoolean("gearInitialized"),
                     )
                 )
             }
@@ -209,6 +221,21 @@ object RecordStore {
             obj.put("bgImageIndex", record.bgImageIndex)
             obj.put("stravaInfo", record.stravaInfo)
             obj.put("routePolyline", record.routePolyline)
+            obj.put(
+                "gearChecklist",
+                JSONArray().apply {
+                    record.gearChecklist.forEach { g ->
+                        put(
+                            JSONObject()
+                                .put("id", g.id)
+                                .put("section", g.section)
+                                .put("label", g.label)
+                                .put("checked", g.checked),
+                        )
+                    }
+                },
+            )
+            obj.put("gearInitialized", record.gearInitialized)
             array.put(obj)
         }
         runCatching { dataFile.writeText(array.toString()) }

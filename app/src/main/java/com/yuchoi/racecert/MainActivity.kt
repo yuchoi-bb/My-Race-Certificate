@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         RecordStore.init(applicationContext)
+        com.yuchoi.racecert.data.GearTemplateStore.init(applicationContext)
         // Google 계정이 연결돼 있으면 시작 시 Drive와 자동 동기화
         com.yuchoi.racecert.sync.DriveSync.requestSync(applicationContext)
         updateInstaller = UpdateInstaller(this)

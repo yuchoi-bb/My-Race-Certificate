@@ -46,6 +46,10 @@ data class RaceRecord(
     val stravaInfo: String = "",
     /** Strava 코스 경로(구글 encoded polyline). 상세 화면에서 경로 스케치로 그린다. */
     val routePolyline: String = "",
+    /** 이 기록의 준비물 체크리스트 */
+    val gearChecklist: List<GearItem> = emptyList(),
+    /** 준비물 탭을 한 번이라도 열어 종목 기본 템플릿으로 초기화했는지 (재초기화 방지) */
+    val gearInitialized: Boolean = false,
 ) {
     val date: LocalDate get() = LocalDate.ofEpochDay(dateEpochDay)
 

@@ -19,7 +19,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -94,8 +94,12 @@ object DriveSync {
                     SyncResult.UPLOADED
                 }
                 remote.updatedAt > localAt -> {
-                    val bytes = downloadBackup(token, remote.id)
-                    BackupManager.importBytes(context, bytes)
+                    val file = downloadBackup(context, token, remote.id)
+                    try {
+                        file.inputStream().use { BackupManager.importStream(context, it) }
+                    } finally {
+                        file.delete()
+                    }
                     RecordStore.setLocalUpdatedAt(remote.updatedAt)
                     SyncResult.DOWNLOADED
                 }
@@ -127,58 +131,72 @@ object DriveSync {
     }
 
     private suspend fun uploadBackup(context: Context, token: String, existingId: String?, updatedAt: Long) {
-        val data = BackupManager.exportBytes(context)
-        val metadata = JSONObject().apply {
-            if (existingId == null) {
-                put("name", BACKUP_NAME)
-                put("parents", org.json.JSONArray().put("appDataFolder"))
-            }
-            put("appProperties", JSONObject().put(PROP_UPDATED_AT, updatedAt.toString()))
-        }
-        val boundary = "----raceCertBoundary${System.currentTimeMillis()}"
-        val body = ByteArrayOutputStream().apply {
-            write("--$boundary\r\n".toByteArray())
-            write("Content-Type: application/json; charset=UTF-8\r\n\r\n".toByteArray())
-            write(metadata.toString().toByteArray())
-            write("\r\n--$boundary\r\n".toByteArray())
-            write("Content-Type: application/zip\r\n\r\n".toByteArray())
-            write(data)
-            write("\r\n--$boundary--\r\n".toByteArray())
-        }.toByteArray()
-
-        val urlStr = if (existingId == null) {
-            "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart"
-        } else {
-            "https://www.googleapis.com/upload/drive/v3/files/$existingId?uploadType=multipart"
-        }
-        val conn = URL(urlStr).openConnection() as HttpURLConnection
+        // 이미지가 쌓이면 zip이 수백MB가 될 수 있어, 전체를 메모리에 올리지 않고
+        // 임시 파일에서 곧바로 요청 본문으로 스트리밍한다(OutOfMemoryError 방지).
+        val zipFile = BackupManager.exportToTempFile(context)
         try {
-            conn.requestMethod = if (existingId == null) "POST" else "PATCH"
-            conn.doOutput = true
-            conn.setRequestProperty("Authorization", "Bearer $token")
-            conn.setRequestProperty("Content-Type", "multipart/related; boundary=$boundary")
-            conn.connectTimeout = 20_000
-            conn.readTimeout = 30_000
-            conn.outputStream.use { it.write(body) }
-            // 토큰 만료(401)·권한/할당량(403) 등은 실패로 확실히 처리 (조용한 성공 방지)
-            if (conn.responseCode !in 200..299) {
-                conn.errorStream?.use { it.readBytes() }
-                throw java.io.IOException("Drive upload failed: HTTP ${conn.responseCode}")
+            val metadata = JSONObject().apply {
+                if (existingId == null) {
+                    put("name", BACKUP_NAME)
+                    put("parents", org.json.JSONArray().put("appDataFolder"))
+                }
+                put("appProperties", JSONObject().put(PROP_UPDATED_AT, updatedAt.toString()))
             }
-            conn.inputStream.use { it.readBytes() }
+            val boundary = "----raceCertBoundary${System.currentTimeMillis()}"
+            val header = (
+                "--$boundary\r\n" +
+                    "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+                    metadata.toString() +
+                    "\r\n--$boundary\r\n" +
+                    "Content-Type: application/zip\r\n\r\n"
+                ).toByteArray()
+            val footer = "\r\n--$boundary--\r\n".toByteArray()
+            val totalLength = header.size.toLong() + zipFile.length() + footer.size.toLong()
+
+            val urlStr = if (existingId == null) {
+                "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart"
+            } else {
+                "https://www.googleapis.com/upload/drive/v3/files/$existingId?uploadType=multipart"
+            }
+            val conn = URL(urlStr).openConnection() as HttpURLConnection
+            try {
+                conn.requestMethod = if (existingId == null) "POST" else "PATCH"
+                conn.doOutput = true
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                conn.setRequestProperty("Content-Type", "multipart/related; boundary=$boundary")
+                conn.connectTimeout = 20_000
+                conn.readTimeout = 30_000
+                conn.setFixedLengthStreamingMode(totalLength)
+                conn.outputStream.use { out ->
+                    out.write(header)
+                    zipFile.inputStream().use { it.copyTo(out) }
+                    out.write(footer)
+                }
+                // 토큰 만료(401)·권한/할당량(403) 등은 실패로 확실히 처리 (조용한 성공 방지)
+                if (conn.responseCode !in 200..299) {
+                    conn.errorStream?.use { it.readBytes() }
+                    throw java.io.IOException("Drive upload failed: HTTP ${conn.responseCode}")
+                }
+                conn.inputStream.use { it.readBytes() }
+            } finally {
+                conn.disconnect()
+            }
         } finally {
-            conn.disconnect()
+            zipFile.delete()
         }
     }
 
-    private fun downloadBackup(token: String, fileId: String): ByteArray {
+    private fun downloadBackup(context: Context, token: String, fileId: String): File {
         val conn = URL("https://www.googleapis.com/drive/v3/files/$fileId?alt=media")
             .openConnection() as HttpURLConnection
+        val file = File(context.cacheDir, "drive-backup-download-${System.currentTimeMillis()}.zip")
         try {
             conn.setRequestProperty("Authorization", "Bearer $token")
             conn.connectTimeout = 20_000
             conn.readTimeout = 30_000
-            return conn.inputStream.use { it.readBytes() }
+            // 전체를 메모리에 올리지 않고 응답을 곧바로 파일로 스트리밍한다.
+            conn.inputStream.use { input -> file.outputStream().use { output -> input.copyTo(output) } }
+            return file
         } finally {
             conn.disconnect()
         }

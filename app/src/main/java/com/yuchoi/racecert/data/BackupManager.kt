@@ -4,8 +4,6 @@ import android.content.Context
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -51,15 +49,13 @@ object BackupManager {
     }
 
     suspend fun import(context: Context, uri: Uri): ImportResult = withContext(Dispatchers.IO) {
-        val bytes = runCatching {
-            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-        }.getOrNull() ?: return@withContext ImportResult.CantOpen
-        // zip 매직 바이트(PK) 확인
-        if (bytes.size < 4 || bytes[0] != 'P'.code.toByte() || bytes[1] != 'K'.code.toByte()) {
-            return@withContext ImportResult.NotAZip
-        }
         try {
-            if (readZip(context, ByteArrayInputStream(bytes))) {
+            val input = context.contentResolver.openInputStream(uri)
+                ?: return@withContext ImportResult.CantOpen
+            // 전체를 메모리에 올리지 않고 스트림에서 바로 읽는다. 유효한 zip이 아니면
+            // ZipInputStream이 ZipException을 던진다.
+            val success = input.use { readZip(context, it) }
+            if (success) {
                 // 복원한 데이터를 '가장 최신'으로 표시해, 이후 Drive 자동 동기화가
                 // 예전 Drive 데이터로 되돌려 덮어쓰지 않도록 한다 (다음 동기화 때 업로드됨).
                 RecordStore.setLocalUpdatedAt(System.currentTimeMillis())
@@ -74,16 +70,20 @@ object BackupManager {
         }
     }
 
-    /** Drive 동기화용: 백업을 바이트 배열로 만든다. */
-    suspend fun exportBytes(context: Context): ByteArray = withContext(Dispatchers.IO) {
-        val bos = ByteArrayOutputStream()
-        writeZip(context, bos)
-        bos.toByteArray()
+    /**
+     * Drive 동기화용: 백업을 캐시 폴더의 임시 파일로 만든다(전체를 메모리에 올리지 않음).
+     * 이미지가 쌓여 zip이 수백MB가 될 수 있어, ByteArray로 들고 있으면 OutOfMemoryError가 난다.
+     * 호출한 쪽에서 다 쓰고 나면 파일을 지워야 한다.
+     */
+    suspend fun exportToTempFile(context: Context): File = withContext(Dispatchers.IO) {
+        val file = File(context.cacheDir, "drive-backup-${System.currentTimeMillis()}.zip")
+        file.outputStream().use { os -> writeZip(context, os) }
+        file
     }
 
-    /** Drive 동기화용: 바이트 배열 백업을 복원한다. */
-    suspend fun importBytes(context: Context, bytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
-        runCatching { readZip(context, ByteArrayInputStream(bytes)) }.getOrDefault(false)
+    /** Drive 동기화용: 스트림에서 바로 zip을 읽어 복원한다(전체를 메모리에 올리지 않음). */
+    suspend fun importStream(context: Context, input: InputStream): Boolean = withContext(Dispatchers.IO) {
+        runCatching { readZip(context, input) }.getOrDefault(false)
     }
 
     private fun writeZip(context: Context, os: OutputStream) {

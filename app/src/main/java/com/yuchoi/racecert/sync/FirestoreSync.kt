@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.firestore.FirebaseFirestore
 import com.yuchoi.racecert.data.PurchaseCategoryStore
 import com.yuchoi.racecert.data.PurchaseStore
@@ -62,6 +63,7 @@ object FirestoreSync {
     private fun log(msg: String) {
         val line = "[${timeFormat.format(Date())}] $msg"
         Log.d(TAG, msg)
+        runCatching { FirebaseCrashlytics.getInstance().log("[$TAG] $msg") }
         debugLog.add(0, line)
         while (debugLog.size > 200) debugLog.removeAt(debugLog.size - 1)
     }
@@ -69,6 +71,10 @@ object FirestoreSync {
     private fun logError(msg: String, t: Throwable) {
         val detail = "$msg :: ${t.javaClass.simpleName}: ${t.message}"
         Log.e(TAG, detail, t)
+        runCatching {
+            FirebaseCrashlytics.getInstance().log("[$TAG] $detail")
+            FirebaseCrashlytics.getInstance().recordException(t)
+        }
         debugLog.add(0, "[${timeFormat.format(Date())}] ❌ $detail")
         while (debugLog.size > 200) debugLog.removeAt(debugLog.size - 1)
     }

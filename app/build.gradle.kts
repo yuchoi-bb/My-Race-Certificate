@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 // CI passes -PbuildNumber=<GitHub run number>; local builds default to 1.
@@ -78,4 +79,6 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-auth-ktx")
+    // Crashlytics: 앱이 죽으면 스택 트레이스를 Firebase 콘솔로 자동 업로드
+    implementation("com.google.firebase:firebase-crashlytics-ktx")
 }

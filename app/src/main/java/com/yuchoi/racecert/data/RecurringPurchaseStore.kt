@@ -48,6 +48,18 @@ object RecurringPurchaseStore {
         persist()
     }
 
+    /** 삭제된 항목(카테고리)을 쓰던 정기 지출 템플릿을 다른 항목으로 옮긴다. */
+    fun reassignCategory(oldCategory: String, newCategory: String) {
+        var changed = false
+        items.forEachIndexed { index, r ->
+            if (r.category == oldCategory) {
+                items[index] = r.copy(category = newCategory)
+                changed = true
+            }
+        }
+        if (changed) persist()
+    }
+
     /** 활성 템플릿마다 시작일~오늘 사이 청구일이 지난 회차를 구매 내역으로 생성한다. */
     fun materializeDue() {
         val today = LocalDate.now()
@@ -100,7 +112,7 @@ object RecurringPurchaseStore {
                     RecurringPurchase(
                         id = obj.getString("id"),
                         label = obj.optString("label"),
-                        category = PurchaseCategory.fromName(obj.optString("category")),
+                        category = PurchaseCategoryStore.normalize(obj.optString("category")),
                         amount = obj.optLong("amount"),
                         dayOfMonth = obj.optInt("dayOfMonth", 1),
                         startDateEpochDay = obj.optLong("startDateEpochDay"),
@@ -121,7 +133,7 @@ object RecurringPurchaseStore {
             val obj = JSONObject()
             obj.put("id", r.id)
             obj.put("label", r.label)
-            obj.put("category", r.category.name)
+            obj.put("category", r.category)
             obj.put("amount", r.amount)
             obj.put("dayOfMonth", r.dayOfMonth)
             obj.put("startDateEpochDay", r.startDateEpochDay)

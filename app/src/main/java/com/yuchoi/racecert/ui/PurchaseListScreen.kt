@@ -3,6 +3,7 @@ package com.yuchoi.racecert.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -31,6 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -45,7 +47,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yuchoi.racecert.BuildConfig
 import com.yuchoi.racecert.data.Purchase
-import com.yuchoi.racecert.data.PurchaseCategory
+import com.yuchoi.racecert.data.PurchaseCategoryStore
 import com.yuchoi.racecert.data.PurchaseStore
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -66,6 +68,7 @@ fun PurchaseListScreen(
     onAddPurchase: () -> Unit,
     onOpenPurchase: (String) -> Unit,
     onOpenRecurring: () -> Unit,
+    onOpenSummary: () -> Unit,
 ) {
     val purchases = PurchaseStore.purchases.toList()
     val sorted = remember(purchases) { purchases.sortedByDescending { it.dateEpochDay } }
@@ -74,6 +77,10 @@ fun PurchaseListScreen(
     val thisYearTotal = purchases.filter { it.date.year == thisYear }.sumOf { it.amount }
     val byCategory = remember(purchases) {
         purchases.groupBy { it.category }.mapValues { (_, list) -> list.sumOf { it.amount } }
+    }
+    val storedCategories = PurchaseCategoryStore.categories.toList()
+    val categoryOrder = remember(storedCategories, byCategory) {
+        storedCategories + byCategory.keys.filter { it !in storedCategories }
     }
     var summaryExpanded by remember { mutableStateOf(false) }
     val hScroll = rememberScrollState()
@@ -161,12 +168,19 @@ fun PurchaseListScreen(
                         if (byCategory.isNotEmpty()) {
                             Spacer(Modifier.height(10.dp))
                             Text(
-                                PurchaseCategory.entries
-                                    .mapNotNull { c -> byCategory[c]?.let { "${c.label} ${"%,d".format(it)}원" } }
+                                categoryOrder
+                                    .mapNotNull { c -> byCategory[c]?.let { "$c ${"%,d".format(it)}원" } }
                                     .joinToString("  ·  "),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                        ) {
+                            TextButton(onClick = onOpenSummary) { Text("연도별 자세히 보기") }
                         }
                     }
                 }
@@ -250,7 +264,7 @@ private fun PurchaseTableRow(p: Purchase, striped: Boolean, onClick: () -> Unit)
             modifier = Modifier.width(colDate).padding(horizontal = 8.dp, vertical = 10.dp),
         )
         Text(
-            p.category.label,
+            p.category,
             style = MaterialTheme.typography.bodySmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

@@ -9,7 +9,7 @@ import java.time.LocalDate
 data class RecurringPurchase(
     val id: String,
     val label: String,
-    val category: PurchaseCategory,
+    val category: String,
     val amount: Long,
     /** 매월 청구일 (1~28, 말일 문제 방지를 위해 28일까지만 허용) */
     val dayOfMonth: Int,

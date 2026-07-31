@@ -7,7 +7,6 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,7 +34,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -61,7 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Image as ForegroundImage
 import com.yuchoi.racecert.data.ImageCompressor
 import com.yuchoi.racecert.data.Purchase
-import com.yuchoi.racecert.data.PurchaseCategory
+import com.yuchoi.racecert.data.PurchaseCategoryStore
 import com.yuchoi.racecert.data.PurchaseStore
 import com.yuchoi.racecert.data.RecordStore
 import kotlinx.coroutines.launch
@@ -84,7 +82,7 @@ fun PurchaseEditScreen(
     val existing = remember(purchaseId) { purchaseId?.let { PurchaseStore.find(it) } }
 
     var date by remember { mutableStateOf(existing?.date ?: LocalDate.now()) }
-    var category by remember { mutableStateOf(existing?.category ?: PurchaseCategory.OTHER) }
+    var category by remember { mutableStateOf(existing?.category ?: PurchaseCategoryStore.DEFAULT_CATEGORY) }
     var amountText by remember { mutableStateOf(existing?.amount?.takeIf { it > 0 }?.toString() ?: "") }
     var vendor by remember { mutableStateOf(existing?.vendor ?: "") }
     var memo by remember { mutableStateOf(existing?.memo ?: "") }
@@ -142,7 +140,7 @@ fun PurchaseEditScreen(
 
     val dirty = if (existing == null) {
         amountText.isNotBlank() || vendor.isNotBlank() || memo.isNotBlank() ||
-            receiptPath.isNotBlank() || linkedRecordId.isNotBlank() || category != PurchaseCategory.OTHER
+            receiptPath.isNotBlank() || linkedRecordId.isNotBlank() || category != PurchaseCategoryStore.DEFAULT_CATEGORY
     } else {
         date != existing.date || category != existing.category ||
             (amountText.filter { it.isDigit() }.toLongOrNull() ?: 0L) != existing.amount ||
@@ -192,19 +190,7 @@ fun PurchaseEditScreen(
             }
             Spacer(Modifier.height(12.dp))
 
-            Text("항목", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PurchaseCategory.entries.take(3).forEach { c ->
-                    FilterChip(selected = category == c, onClick = { category = c }, label = { Text(c.label) })
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PurchaseCategory.entries.drop(3).forEach { c ->
-                    FilterChip(selected = category == c, onClick = { category = c }, label = { Text(c.label) })
-                }
-            }
+            CategoryPicker(selected = category, onSelect = { category = it })
             Spacer(Modifier.height(12.dp))
 
             OutlinedTextField(

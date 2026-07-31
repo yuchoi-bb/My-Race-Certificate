@@ -49,6 +49,18 @@ object PurchaseStore {
         persist()
     }
 
+    /** 삭제된 항목(카테고리)을 쓰던 구매 내역을 다른 항목으로 옮긴다. */
+    fun reassignCategory(oldCategory: String, newCategory: String) {
+        var changed = false
+        purchases.forEachIndexed { index, p ->
+            if (p.category == oldCategory) {
+                purchases[index] = p.copy(category = newCategory)
+                changed = true
+            }
+        }
+        if (changed) persist()
+    }
+
     /**
      * 대회 기록의 기본 참가비·이벤트 추가금을 구매 내역과 동기화한다.
      * 기록을 저장할 때마다 호출되며, 금액이 바뀌면 연결된 구매 내역도 함께 갱신되고
@@ -71,7 +83,7 @@ object PurchaseStore {
                 dateEpochDay = record.dateEpochDay,
                 // 카테고리·구입처·메모는 사용자가 구매 탭에서 직접 고쳤을 수 있으니 유지하고,
                 // 금액·날짜·연결 대회만 대회 기록 쪽을 기준으로 계속 맞춘다.
-                category = existing?.category ?: PurchaseCategory.ENTRY_FEE,
+                category = existing?.category ?: PurchaseCategoryStore.ENTRY_FEE_CATEGORY,
                 amount = amount,
                 vendor = existing?.vendor?.takeIf { it.isNotBlank() } ?: defaultVendor,
                 memo = existing?.memo?.takeIf { it.isNotBlank() } ?: defaultMemo,
@@ -108,7 +120,7 @@ object PurchaseStore {
                     Purchase(
                         id = obj.getString("id"),
                         dateEpochDay = obj.optLong("dateEpochDay"),
-                        category = PurchaseCategory.fromName(obj.optString("category")),
+                        category = PurchaseCategoryStore.normalize(obj.optString("category")),
                         amount = obj.optLong("amount"),
                         vendor = obj.optString("vendor"),
                         memo = obj.optString("memo"),
@@ -127,7 +139,7 @@ object PurchaseStore {
             val obj = JSONObject()
             obj.put("id", p.id)
             obj.put("dateEpochDay", p.dateEpochDay)
-            obj.put("category", p.category.name)
+            obj.put("category", p.category)
             obj.put("amount", p.amount)
             obj.put("vendor", p.vendor)
             obj.put("memo", p.memo)

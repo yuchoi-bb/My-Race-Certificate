@@ -42,7 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.yuchoi.racecert.data.PurchaseCategory
+import com.yuchoi.racecert.data.PurchaseCategoryStore
 import com.yuchoi.racecert.data.RecurringPurchase
 import com.yuchoi.racecert.data.RecurringPurchaseStore
 import java.time.Instant
@@ -65,7 +65,7 @@ fun RecurringPurchaseEditScreen(
     val existing = remember(recurringId) { recurringId?.let { RecurringPurchaseStore.find(it) } }
 
     var label by remember { mutableStateOf(existing?.label ?: "") }
-    var category by remember { mutableStateOf(existing?.category ?: PurchaseCategory.OTHER) }
+    var category by remember { mutableStateOf(existing?.category ?: PurchaseCategoryStore.DEFAULT_CATEGORY) }
     var amountText by remember { mutableStateOf(existing?.amount?.takeIf { it > 0 }?.toString() ?: "") }
     var dayOfMonthText by remember { mutableStateOf((existing?.dayOfMonth ?: 1).toString()) }
     var startDate by remember { mutableStateOf(existing?.startDate ?: LocalDate.now()) }
@@ -170,19 +170,7 @@ fun RecurringPurchaseEditScreen(
             )
             Spacer(Modifier.height(12.dp))
 
-            Text("항목", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PurchaseCategory.entries.take(3).forEach { c ->
-                    FilterChip(selected = category == c, onClick = { category = c }, label = { Text(c.label) })
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PurchaseCategory.entries.drop(3).forEach { c ->
-                    FilterChip(selected = category == c, onClick = { category = c }, label = { Text(c.label) })
-                }
-            }
+            CategoryPicker(selected = category, onSelect = { category = it })
             Spacer(Modifier.height(12.dp))
 
             Row {

@@ -22,6 +22,7 @@ object BackupManager {
     private fun dataFile(context: Context) = File(context.filesDir, "records.json")
     private fun purchasesFile(context: Context) = File(context.filesDir, "purchases.json")
     private fun recurringFile(context: Context) = File(context.filesDir, "recurring_purchases.json")
+    private fun categoriesFile(context: Context) = File(context.filesDir, "purchase_categories.json")
     private fun imagesDir(context: Context) = File(context.filesDir, "images").apply {
         if (!exists()) mkdirs()
     }
@@ -112,6 +113,12 @@ object BackupManager {
                 recurringJson.inputStream().use { it.copyTo(zip) }
                 zip.closeEntry()
             }
+            val categoriesJson = categoriesFile(context)
+            if (categoriesJson.exists()) {
+                zip.putNextEntry(ZipEntry("purchase_categories.json"))
+                categoriesJson.inputStream().use { it.copyTo(zip) }
+                zip.closeEntry()
+            }
             imagesDir(context).listFiles()?.forEach { f ->
                 if (f.name !in referenced) return@forEach
                 zip.putNextEntry(ZipEntry("images/${f.name}"))
@@ -127,6 +134,7 @@ object BackupManager {
         var foundRecords = false
         var foundPurchases = false
         var foundRecurring = false
+        var foundCategories = false
         ZipInputStream(input).use { zip ->
             var entry: ZipEntry? = zip.nextEntry
             while (entry != null) {
@@ -144,6 +152,10 @@ object BackupManager {
                         recurringFile(context).outputStream().use { zip.copyTo(it) }
                         foundRecurring = true
                     }
+                    name == "purchase_categories.json" -> {
+                        categoriesFile(context).outputStream().use { zip.copyTo(it) }
+                        foundCategories = true
+                    }
                     name.startsWith("images/") && !entry.isDirectory -> {
                         // 파일명만 취하고, 최종 경로가 images 폴더 안인지 확인 (Zip Slip 방어)
                         val fn = File(name.substringAfter("images/")).name
@@ -157,11 +169,13 @@ object BackupManager {
                 entry = zip.nextEntry
             }
         }
-        // records.json·purchases.json·recurring_purchases.json 중 하나만 있어도 성공으로 처리한다.
-        if (!foundRecords && !foundPurchases && !foundRecurring) return false
+        // records.json·purchases.json·recurring_purchases.json·purchase_categories.json 중
+        // 하나만 있어도 성공으로 처리한다.
+        if (!foundRecords && !foundPurchases && !foundRecurring && !foundCategories) return false
         RecordStore.reload()
         PurchaseStore.reload()
         RecurringPurchaseStore.reload()
+        PurchaseCategoryStore.reload()
         return true
     }
 }

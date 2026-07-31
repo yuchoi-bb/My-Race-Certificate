@@ -32,6 +32,7 @@ import com.yuchoi.racecert.ui.AddEditRecordScreen
 import com.yuchoi.racecert.ui.BodyGraphScreen
 import com.yuchoi.racecert.ui.PurchaseEditScreen
 import com.yuchoi.racecert.ui.PurchaseListScreen
+import com.yuchoi.racecert.ui.PurchaseYearlySummaryScreen
 import com.yuchoi.racecert.ui.RecordDetailScreen
 import com.yuchoi.racecert.ui.RecordListScreen
 import com.yuchoi.racecert.ui.RecurringPurchaseEditScreen
@@ -51,6 +52,7 @@ private sealed interface Screen {
     data class PurchaseEdit(val purchaseId: String?) : Screen
     data object RecurringList : Screen
     data class RecurringEdit(val recurringId: String?) : Screen
+    data object PurchaseSummary : Screen
 }
 
 class MainActivity : ComponentActivity() {
@@ -61,6 +63,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // PurchaseStore가 RecordStore보다 먼저 초기화돼야, RecordStore가 시작 시
         // 고아 이미지를 정리할 때 구매 영수증 사진을 잘못 지우지 않는다.
+        com.yuchoi.racecert.data.PurchaseCategoryStore.init(applicationContext)
         com.yuchoi.racecert.data.PurchaseStore.init(applicationContext)
         RecordStore.init(applicationContext)
         com.yuchoi.racecert.data.GearTemplateStore.init(applicationContext)
@@ -208,6 +211,7 @@ private fun App(
                         onAddPurchase = { screen = Screen.PurchaseEdit(null) },
                         onOpenPurchase = { screen = Screen.PurchaseEdit(it) },
                         onOpenRecurring = { screen = Screen.RecurringList },
+                        onOpenSummary = { screen = Screen.PurchaseSummary },
                     )
                 }
             }
@@ -269,6 +273,11 @@ private fun App(
                 onDone = { screen = Screen.RecurringList },
                 onCancel = { screen = Screen.RecurringList },
             )
+        }
+
+        is Screen.PurchaseSummary -> {
+            BackHandler { screen = Screen.List }
+            PurchaseYearlySummaryScreen(onBack = { screen = Screen.List })
         }
     }
 

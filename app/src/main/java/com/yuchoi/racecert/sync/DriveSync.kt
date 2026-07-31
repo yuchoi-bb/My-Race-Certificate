@@ -208,11 +208,50 @@ object DriveSync {
         val body = httpGet(url, token) ?: return null
         val files = JSONObject(body).optJSONArray("files") ?: return null
         if (files.length() == 0) return null
-        val f = files.getJSONObject(0)
-        val id = f.optString("id")
-        val updatedAt = f.optJSONObject("appProperties")
-            ?.optString(PROP_UPDATED_AT)?.toLongOrNull() ?: 0L
-        return RemoteBackup(id, updatedAt)
+
+        // 같은 이름의 파일이 여러 개 있으면(예전에 중간에 끊긴 동기화가 남긴 중복일 수 있음)
+        // 가장 최신 것만 남기고 나머지는 지운다 — appDataFolder는 숨김 저장소라 사용자가
+        // Drive 앱에서 직접 못 보고 못 지우는데, 저장공간은 그대로 차지한다.
+        var best: RemoteBackup? = null
+        val duplicateIds = mutableListOf<String>()
+        for (i in 0 until files.length()) {
+            val f = files.getJSONObject(i)
+            val id = f.optString("id")
+            val updatedAt = f.optJSONObject("appProperties")
+                ?.optString(PROP_UPDATED_AT)?.toLongOrNull() ?: 0L
+            val current = best
+            if (current == null || updatedAt > current.updatedAt) {
+                if (current != null) duplicateIds.add(current.id)
+                best = RemoteBackup(id, updatedAt)
+            } else {
+                duplicateIds.add(id)
+            }
+        }
+        if (files.length() > 1) {
+            log("findBackup: 이름이 같은 백업 파일 ${files.length()}개 발견 (중복 ${duplicateIds.size}개 정리 시도)")
+        }
+        duplicateIds.forEach { id ->
+            runCatching { deleteFile(id, token) }
+                .onSuccess { log("중복 백업 파일 삭제 완료: $id") }
+                .onFailure { logError("중복 백업 파일 삭제 실패: $id", it) }
+        }
+        return best
+    }
+
+    private fun deleteFile(fileId: String, token: String) {
+        val conn = URL("https://www.googleapis.com/drive/v3/files/$fileId")
+            .openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "DELETE"
+            conn.setRequestProperty("Authorization", "Bearer $token")
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 15_000
+            if (conn.responseCode !in 200..299 && conn.responseCode != 404) {
+                throw java.io.IOException("Drive delete failed: HTTP ${conn.responseCode}")
+            }
+        } finally {
+            conn.disconnect()
+        }
     }
 
     private suspend fun uploadBackup(context: Context, token: String, existingId: String?, updatedAt: Long) {
@@ -263,7 +302,10 @@ object DriveSync {
                 log("HTTP 요청 전송 완료 (${System.currentTimeMillis() - transferStart}ms, 총 ${totalLength}바이트)")
                 // 토큰 만료(401)·권한/할당량(403) 등은 실패로 확실히 처리 (조용한 성공 방지)
                 if (conn.responseCode !in 200..299) {
-                    conn.errorStream?.use { it.readBytes() }
+                    val errBody = runCatching {
+                        conn.errorStream?.use { it.readBytes().toString(Charsets.UTF_8) }
+                    }.getOrNull() ?: "(응답 본문 읽기 실패)"
+                    log("Drive 응답 본문(HTTP ${conn.responseCode}): $errBody")
                     throw java.io.IOException("Drive upload failed: HTTP ${conn.responseCode}")
                 }
                 conn.inputStream.use { it.readBytes() }

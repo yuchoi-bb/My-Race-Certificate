@@ -205,7 +205,7 @@ fun PurchaseEditScreen(
             OutlinedTextField(
                 value = vendor,
                 onValueChange = { vendor = it },
-                label = { Text("구입처 (예: 나이키, 대회 접수처)") },
+                label = { Text("품목 (예: 나이키 러닝화, ○○마라톤)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )

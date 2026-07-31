@@ -67,11 +67,11 @@ object PurchaseStore {
      * 금액이 비워지면 해당 구매 내역은 삭제된다. id를 결정적으로 고정해 중복 생성을 막는다.
      */
     fun syncRaceFees(record: RaceRecord) {
-        syncFee("entryfee:${record.id}", record.baseFeeAmount, record, "기본 참가비", "")
-        syncFee("eventfee:${record.id}", record.eventFeeAmount, record, "이벤트 추가금", record.eventNote)
+        syncFee("entryfee:${record.id}", record.baseFeeAmount, record, "기본 참가비")
+        syncFee("eventfee:${record.id}", record.eventFeeAmount, record, record.eventNote.ifBlank { "이벤트 추가금" })
     }
 
-    private fun syncFee(id: String, amount: Long, record: RaceRecord, defaultVendor: String, defaultMemo: String) {
+    private fun syncFee(id: String, amount: Long, record: RaceRecord, defaultMemo: String) {
         if (amount <= 0) {
             if (find(id) != null) delete(id)
             return
@@ -81,11 +81,11 @@ object PurchaseStore {
             Purchase(
                 id = id,
                 dateEpochDay = record.dateEpochDay,
-                // 카테고리·구입처·메모는 사용자가 구매 탭에서 직접 고쳤을 수 있으니 유지하고,
-                // 금액·날짜·연결 대회만 대회 기록 쪽을 기준으로 계속 맞춘다.
+                // 카테고리·메모는 사용자가 구매 탭에서 직접 고쳤을 수 있으니 유지하고,
+                // 품목(대회명)·금액·날짜·연결 대회는 대회 기록 쪽을 기준으로 항상 맞춘다.
                 category = existing?.category ?: PurchaseCategoryStore.ENTRY_FEE_CATEGORY,
                 amount = amount,
-                vendor = existing?.vendor?.takeIf { it.isNotBlank() } ?: defaultVendor,
+                vendor = record.title,
                 memo = existing?.memo?.takeIf { it.isNotBlank() } ?: defaultMemo,
                 receiptPath = existing?.receiptPath ?: "",
                 linkedRecordId = record.id,

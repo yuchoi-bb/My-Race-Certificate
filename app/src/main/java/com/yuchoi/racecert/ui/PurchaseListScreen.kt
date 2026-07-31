@@ -51,10 +51,11 @@ import com.yuchoi.racecert.data.PurchaseCategoryStore
 import com.yuchoi.racecert.data.PurchaseStore
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
-private val purchaseDateFormatter = DateTimeFormatter.ofPattern("yy.MM.dd")
+private val purchaseDateFormatter = DateTimeFormatter.ofPattern("yy.MM.dd(E)", Locale.KOREAN)
 
-private val colDate = 56.dp
+private val colDate = 88.dp
 private val colCategory = 68.dp
 private val colItem = 120.dp
 private val colAmount = 88.dp

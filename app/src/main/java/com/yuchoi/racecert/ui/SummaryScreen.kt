@@ -338,6 +338,45 @@ fun SummaryScreen(
                 }
             }
 
+            item(key = "firestoreDebug") {
+                val debugLog = FirestoreSync.debugLog
+                Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "Firestore 디버그 로그 (${debugLog.size})",
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.weight(1f),
+                            )
+                            OutlinedButton(onClick = { FirestoreSync.clearLog() }) { Text("지우기") }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        if (debugLog.isEmpty()) {
+                            Text(
+                                "아직 기록이 없어요. 위에서 로그인하거나 '지금 동기화'를 눌러보세요.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            Column {
+                                debugLog.forEach { line ->
+                                    Text(
+                                        line,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (line.contains("❌")) {
+                                            MaterialTheme.colorScheme.error
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        modifier = Modifier.padding(vertical = 2.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             item(key = "strava") {
                 var stravaConnected by remember { mutableStateOf(com.yuchoi.racecert.strava.StravaAuth.isConnected(context)) }
                 Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {

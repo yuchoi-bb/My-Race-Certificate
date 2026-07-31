@@ -88,6 +88,21 @@ object DriveSync {
     var lastError: String? = null
         private set
 
+    /** 업로드·다운로드처럼 네트워크에 크게 의존하는 작업을 일시적인 연결 오류 시 재시도한다. */
+    private suspend fun <T> retryIO(times: Int = 3, initialDelayMs: Long = 1500, block: suspend () -> T): T {
+        var delayMs = initialDelayMs
+        repeat(times - 1) {
+            try {
+                return block()
+            } catch (e: java.io.IOException) {
+                runCatching { FirebaseCrashlytics.getInstance().log("[DriveSync] IO 오류, 재시도: ${e.message}") }
+                kotlinx.coroutines.delay(delayMs)
+                delayMs *= 2
+            }
+        }
+        return block()
+    }
+
     private suspend fun runSync(context: Context): SyncResult {
         val account = lastAccount(context)?.account ?: return SyncResult.NOT_SIGNED_IN
         return try {
@@ -96,11 +111,11 @@ object DriveSync {
             val localAt = RecordStore.localUpdatedAt()
             val result = when {
                 remote == null -> {
-                    uploadBackup(context, token, existingId = null, updatedAt = localAt)
+                    retryIO { uploadBackup(context, token, existingId = null, updatedAt = localAt) }
                     SyncResult.UPLOADED
                 }
                 remote.updatedAt > localAt -> {
-                    val file = downloadBackup(context, token, remote.id)
+                    val file = retryIO { downloadBackup(context, token, remote.id) }
                     try {
                         file.inputStream().use { BackupManager.importStream(context, it) }
                     } finally {
@@ -110,7 +125,7 @@ object DriveSync {
                     SyncResult.DOWNLOADED
                 }
                 localAt > remote.updatedAt -> {
-                    uploadBackup(context, token, existingId = remote.id, updatedAt = localAt)
+                    retryIO { uploadBackup(context, token, existingId = remote.id, updatedAt = localAt) }
                     SyncResult.UPLOADED
                 }
                 else -> SyncResult.IN_SYNC
@@ -124,6 +139,12 @@ object DriveSync {
             runCatching {
                 e.intent?.apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }?.let { context.startActivity(it) }
             }
+            SyncResult.ERROR
+        } catch (e: java.io.IOException) {
+            // 3번 재시도 후에도 실패한 네트워크 문제. 대개 연결이 불안정해서 생긴다.
+            lastError = "네트워크 연결이 불안정해서 실패했어요 (${e.javaClass.simpleName}: ${e.message ?: "메시지 없음"}). " +
+                "와이파이가 안정적인 곳에서 다시 시도해 주세요."
+            runCatching { FirebaseCrashlytics.getInstance().recordException(e) }
             SyncResult.ERROR
         } catch (e: Exception) {
             lastError = "${e.javaClass.simpleName}: ${e.message ?: "(메시지 없음)"}"

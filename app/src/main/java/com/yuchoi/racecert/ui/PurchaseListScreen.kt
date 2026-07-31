@@ -2,29 +2,30 @@ package com.yuchoi.racecert.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Receipt
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,24 +33,31 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.Image as ForegroundImage
 import com.yuchoi.racecert.BuildConfig
 import com.yuchoi.racecert.data.Purchase
 import com.yuchoi.racecert.data.PurchaseCategory
 import com.yuchoi.racecert.data.PurchaseStore
-import com.yuchoi.racecert.data.RecordStore
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 private val purchaseDateFormatter = DateTimeFormatter.ofPattern("yy.MM.dd")
+
+private val colDate = 56.dp
+private val colCategory = 68.dp
+private val colItem = 120.dp
+private val colAmount = 88.dp
+private val colMemo = 140.dp
+private val tableWidth = colDate + colCategory + colItem + colAmount + colMemo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,6 +75,8 @@ fun PurchaseListScreen(
     val byCategory = remember(purchases) {
         purchases.groupBy { it.category }.mapValues { (_, list) -> list.sumOf { it.amount } }
     }
+    var summaryExpanded by remember { mutableStateOf(false) }
+    val hScroll = rememberScrollState()
 
     Scaffold(
         topBar = {
@@ -94,19 +104,33 @@ fun PurchaseListScreen(
             )
         },
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding() + 8.dp,
-                bottom = innerPadding.calculateBottomPadding() + 96.dp,
-                start = 16.dp,
-                end = 16.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
         ) {
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+            // 전체 지출·올해 지출 요약은 기본적으로 접어둔다. 필요할 때만 눌러서 펼친다.
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clickable { summaryExpanded = !summaryExpanded },
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "지출 요약",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Icon(
+                            if (summaryExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                            contentDescription = if (summaryExpanded) "접기" else "펼치기",
+                        )
+                    }
+                    if (summaryExpanded) {
+                        Spacer(Modifier.height(8.dp))
                         Row {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
@@ -149,18 +173,40 @@ fun PurchaseListScreen(
             }
 
             if (sorted.isEmpty()) {
-                item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            "아직 등록된 구매 내역이 없어요.\n오른쪽 아래 '구매 추가'로 첫 지출을 기록해 보세요.",
-                            modifier = Modifier.padding(16.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
+                Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    Text(
+                        "아직 등록된 구매 내역이 없어요.\n오른쪽 아래 '구매 추가'로 첫 지출을 기록해 보세요.",
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
             } else {
-                items(sorted, key = { it.id }) { p ->
-                    PurchaseCard(p, onClick = { onOpenPurchase(p.id) })
+                // 날짜·분류·품목·금액·비고 순서의 표. 화면보다 넓으면 좌우로 스크롤한다.
+                Box(
+                    modifier = Modifier
+                        .horizontalScroll(hScroll)
+                        .padding(horizontal = 12.dp),
+                ) {
+                    TableHeaderRow()
+                }
+                HorizontalDivider()
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(hScroll)
+                        .padding(horizontal = 12.dp),
+                ) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .width(tableWidth)
+                            .fillMaxHeight(),
+                        contentPadding = PaddingValues(bottom = innerPadding.calculateBottomPadding() + 96.dp),
+                    ) {
+                        itemsIndexed(sorted, key = { _, p -> p.id }) { index, p ->
+                            PurchaseTableRow(p, striped = index % 2 == 1, onClick = { onOpenPurchase(p.id) })
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        }
+                    }
                 }
             }
         }
@@ -168,64 +214,71 @@ fun PurchaseListScreen(
 }
 
 @Composable
-private fun PurchaseCard(p: Purchase, onClick: () -> Unit) {
-    val linkedTitle = remember(p.linkedRecordId) {
-        p.linkedRecordId.takeIf { it.isNotBlank() }?.let { RecordStore.find(it)?.title }
+private fun HeaderCell(text: String, width: Dp) {
+    Box(modifier = Modifier.width(width).padding(horizontal = 8.dp, vertical = 10.dp)) {
+        Text(text, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
     }
-    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (p.receiptPath.isNotBlank()) {
-                val bmp = rememberSampledBitmap(p.receiptPath, reqSizePx = 160)
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (bmp != null) {
-                        ForegroundImage(
-                            bitmap = bmp,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        Icon(Icons.Filled.Receipt, contentDescription = null)
-                    }
-                }
-                Spacer(Modifier.width(12.dp))
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AssistChip(onClick = onClick, label = { Text(p.category.label) })
-                    Spacer(Modifier.width(8.dp))
-                    Text(p.date.format(purchaseDateFormatter), style = MaterialTheme.typography.bodyMedium)
-                }
-                if (p.vendor.isNotBlank() || linkedTitle != null) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        listOfNotNull(
-                            p.vendor.takeIf { it.isNotBlank() },
-                            linkedTitle?.let { "🏅 $it" },
-                        ).joinToString("  ·  "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "${"%,d".format(p.amount)}원",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
+}
+
+@Composable
+private fun TableHeaderRow() {
+    Row(modifier = Modifier.width(tableWidth)) {
+        HeaderCell("날짜", colDate)
+        HeaderCell("분류", colCategory)
+        HeaderCell("품목", colItem)
+        HeaderCell("금액", colAmount)
+        HeaderCell("비고", colMemo)
+    }
+}
+
+@Composable
+private fun PurchaseTableRow(p: Purchase, striped: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .width(tableWidth)
+            .background(
+                if (striped) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface,
             )
-        }
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            p.date.format(purchaseDateFormatter),
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(colDate).padding(horizontal = 8.dp, vertical = 10.dp),
+        )
+        Text(
+            p.category.label,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(colCategory).padding(horizontal = 8.dp, vertical = 10.dp),
+        )
+        Text(
+            p.vendor.ifBlank { "-" },
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(colItem).padding(horizontal = 8.dp, vertical = 10.dp),
+        )
+        Text(
+            "${"%,d".format(p.amount)}원",
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(colAmount).padding(horizontal = 8.dp, vertical = 10.dp),
+        )
+        Text(
+            p.memo.ifBlank { "-" },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(colMemo).padding(horizontal = 8.dp, vertical = 10.dp),
+        )
     }
 }

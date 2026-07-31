@@ -65,7 +65,7 @@ private fun syncMessage(r: DriveSync.SyncResult): String = when (r) {
     DriveSync.SyncResult.DOWNLOADED -> "Drive의 최신 기록을 받아왔어요."
     DriveSync.SyncResult.IN_SYNC -> "이미 최신 상태예요."
     DriveSync.SyncResult.NOT_SIGNED_IN -> "로그인이 필요해요."
-    DriveSync.SyncResult.ERROR -> "동기화 실패 (네트워크/권한/OAuth 설정 확인)."
+    DriveSync.SyncResult.ERROR -> "동기화 실패: ${DriveSync.lastError ?: "알 수 없는 오류"}"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

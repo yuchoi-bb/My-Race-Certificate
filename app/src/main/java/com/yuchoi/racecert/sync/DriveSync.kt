@@ -3,11 +3,13 @@ package com.yuchoi.racecert.sync
 import android.content.Context
 import android.content.Intent
 import com.google.android.gms.auth.GoogleAuthUtil
+import com.google.android.gms.auth.UserRecoverableAuthException
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.Scope
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.yuchoi.racecert.R
 import com.yuchoi.racecert.data.BackupManager
 import com.yuchoi.racecert.data.RecordStore
@@ -82,13 +84,17 @@ object DriveSync {
 
     enum class SyncResult { UPLOADED, DOWNLOADED, IN_SYNC, NOT_SIGNED_IN, ERROR }
 
+    /** 마지막 ERROR의 구체적인 원인(화면에 보여줄 사람이 읽을 수 있는 문장). */
+    var lastError: String? = null
+        private set
+
     private suspend fun runSync(context: Context): SyncResult {
         val account = lastAccount(context)?.account ?: return SyncResult.NOT_SIGNED_IN
         return try {
             val token = GoogleAuthUtil.getToken(context, account, "oauth2:$DRIVE_APPDATA")
             val remote = findBackup(token)
             val localAt = RecordStore.localUpdatedAt()
-            when {
+            val result = when {
                 remote == null -> {
                     uploadBackup(context, token, existingId = null, updatedAt = localAt)
                     SyncResult.UPLOADED
@@ -109,7 +115,19 @@ object DriveSync {
                 }
                 else -> SyncResult.IN_SYNC
             }
-        } catch (_: Exception) {
+            lastError = null
+            result
+        } catch (e: UserRecoverableAuthException) {
+            // Drive 권한(scope) 재동의가 필요한 상태. 동의 화면을 새 태스크로 띄워
+            // 사용자가 한 번 눌러 승인하면 다음 동기화부터는 정상 진행된다.
+            lastError = "Google 계정 권한을 다시 승인해야 해요. 동의 화면을 띄웠어요 — 승인 후 다시 동기화해 주세요."
+            runCatching {
+                e.intent?.apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }?.let { context.startActivity(it) }
+            }
+            SyncResult.ERROR
+        } catch (e: Exception) {
+            lastError = "${e.javaClass.simpleName}: ${e.message ?: "(메시지 없음)"}"
+            runCatching { FirebaseCrashlytics.getInstance().recordException(e) }
             SyncResult.ERROR
         }
     }

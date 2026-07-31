@@ -48,10 +48,11 @@ object RecordStore {
         pruneOrphanImages()
     }
 
-    /** 어떤 기록도 참조하지 않는 이미지 파일을 삭제해 저장공간을 회수한다. */
+    /** 어떤 기록·구매 영수증도 참조하지 않는 이미지 파일을 삭제해 저장공간을 회수한다. */
     private fun pruneOrphanImages() {
         runCatching {
             val referenced = records.flatMap { it.imagePaths }.map { File(it).name }.toHashSet()
+            referenced += PurchaseStore.referencedImageNames()
             imagesDir.listFiles()?.forEach { f ->
                 if (f.name !in referenced) f.delete()
             }

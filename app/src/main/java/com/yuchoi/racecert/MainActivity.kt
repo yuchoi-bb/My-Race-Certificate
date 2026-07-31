@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -29,6 +30,8 @@ import androidx.compose.runtime.setValue
 import com.yuchoi.racecert.data.RecordStore
 import com.yuchoi.racecert.ui.AddEditRecordScreen
 import com.yuchoi.racecert.ui.BodyGraphScreen
+import com.yuchoi.racecert.ui.PurchaseEditScreen
+import com.yuchoi.racecert.ui.PurchaseListScreen
 import com.yuchoi.racecert.ui.RecordDetailScreen
 import com.yuchoi.racecert.ui.RecordListScreen
 import com.yuchoi.racecert.ui.ShareImportScreen
@@ -43,6 +46,7 @@ private sealed interface Screen {
     data class Detail(val recordId: String) : Screen
     data class AddEdit(val recordId: String?) : Screen
     data class ShareImport(val uris: kotlin.collections.List<Uri>) : Screen
+    data class PurchaseEdit(val purchaseId: String?) : Screen
 }
 
 class MainActivity : ComponentActivity() {
@@ -51,6 +55,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // PurchaseStore가 RecordStore보다 먼저 초기화돼야, RecordStore가 시작 시
+        // 고아 이미지를 정리할 때 구매 영수증 사진을 잘못 지우지 않는다.
+        com.yuchoi.racecert.data.PurchaseStore.init(applicationContext)
         RecordStore.init(applicationContext)
         com.yuchoi.racecert.data.GearTemplateStore.init(applicationContext)
         // Google 계정이 연결돼 있으면 시작 시 Drive와 자동 동기화
@@ -157,6 +164,12 @@ private fun App(
                         icon = { Icon(Icons.Filled.MonitorHeart, contentDescription = null) },
                         label = { Text("몸 상태") },
                     )
+                    NavigationBarItem(
+                        selected = homeTab == 3,
+                        onClick = { homeTab = 3 },
+                        icon = { Icon(Icons.Filled.ShoppingCart, contentDescription = null) },
+                        label = { Text("구매") },
+                    )
                 }
             }
             when (homeTab) {
@@ -175,9 +188,17 @@ private fun App(
                         onOpenRecord = { screen = Screen.Detail(it) },
                     )
                 }
-                else -> {
+                2 -> {
                     BackHandler { homeTab = 0 }
                     BodyGraphScreen(bottomBar = bottomBar)
+                }
+                else -> {
+                    BackHandler { homeTab = 0 }
+                    PurchaseListScreen(
+                        bottomBar = bottomBar,
+                        onAddPurchase = { screen = Screen.PurchaseEdit(null) },
+                        onOpenPurchase = { screen = Screen.PurchaseEdit(it) },
+                    )
                 }
             }
         }
@@ -212,6 +233,14 @@ private fun App(
                 onDone = { screen = Screen.List },
                 onOpenRecord = { screen = Screen.Detail(it) },
                 onOpenEdit = { screen = Screen.AddEdit(it) },
+            )
+        }
+
+        is Screen.PurchaseEdit -> {
+            PurchaseEditScreen(
+                purchaseId = current.purchaseId,
+                onDone = { screen = Screen.List },
+                onCancel = { screen = Screen.List },
             )
         }
     }

@@ -20,11 +20,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Receipt
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -55,6 +57,7 @@ fun PurchaseListScreen(
     bottomBar: @Composable () -> Unit,
     onAddPurchase: () -> Unit,
     onOpenPurchase: (String) -> Unit,
+    onOpenRecurring: () -> Unit,
 ) {
     val purchases = PurchaseStore.purchases.toList()
     val sorted = remember(purchases) { purchases.sortedByDescending { it.dateEpochDay } }
@@ -70,6 +73,9 @@ fun PurchaseListScreen(
             TopAppBar(
                 title = { Text("구매 내역") },
                 actions = {
+                    IconButton(onClick = onOpenRecurring) {
+                        Icon(Icons.Filled.Repeat, contentDescription = "정기 지출")
+                    }
                     Text(
                         text = "v${BuildConfig.VERSION_NAME}",
                         style = MaterialTheme.typography.labelSmall,

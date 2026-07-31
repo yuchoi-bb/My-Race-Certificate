@@ -81,6 +81,7 @@ object RecordStore {
         records.remove(record)
         record.imagePaths.forEach { path -> runCatching { File(path).delete() } }
         persist()
+        PurchaseStore.deleteFeesForRecord(id)
     }
 
     /**

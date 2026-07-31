@@ -21,6 +21,7 @@ object BackupManager {
 
     private fun dataFile(context: Context) = File(context.filesDir, "records.json")
     private fun purchasesFile(context: Context) = File(context.filesDir, "purchases.json")
+    private fun recurringFile(context: Context) = File(context.filesDir, "recurring_purchases.json")
     private fun imagesDir(context: Context) = File(context.filesDir, "images").apply {
         if (!exists()) mkdirs()
     }
@@ -105,6 +106,12 @@ object BackupManager {
                 purchasesJson.inputStream().use { it.copyTo(zip) }
                 zip.closeEntry()
             }
+            val recurringJson = recurringFile(context)
+            if (recurringJson.exists()) {
+                zip.putNextEntry(ZipEntry("recurring_purchases.json"))
+                recurringJson.inputStream().use { it.copyTo(zip) }
+                zip.closeEntry()
+            }
             imagesDir(context).listFiles()?.forEach { f ->
                 if (f.name !in referenced) return@forEach
                 zip.putNextEntry(ZipEntry("images/${f.name}"))
@@ -119,6 +126,7 @@ object BackupManager {
         val imagesRoot = images.canonicalPath + File.separator
         var foundRecords = false
         var foundPurchases = false
+        var foundRecurring = false
         ZipInputStream(input).use { zip ->
             var entry: ZipEntry? = zip.nextEntry
             while (entry != null) {
@@ -131,6 +139,10 @@ object BackupManager {
                     name == "purchases.json" -> {
                         purchasesFile(context).outputStream().use { zip.copyTo(it) }
                         foundPurchases = true
+                    }
+                    name == "recurring_purchases.json" -> {
+                        recurringFile(context).outputStream().use { zip.copyTo(it) }
+                        foundRecurring = true
                     }
                     name.startsWith("images/") && !entry.isDirectory -> {
                         // 파일명만 취하고, 최종 경로가 images 폴더 안인지 확인 (Zip Slip 방어)
@@ -145,10 +157,11 @@ object BackupManager {
                 entry = zip.nextEntry
             }
         }
-        // records.json이나 purchases.json 둘 중 하나만 있어도(구매 전용 백업 등) 성공으로 처리한다.
-        if (!foundRecords && !foundPurchases) return false
+        // records.json·purchases.json·recurring_purchases.json 중 하나만 있어도 성공으로 처리한다.
+        if (!foundRecords && !foundPurchases && !foundRecurring) return false
         RecordStore.reload()
         PurchaseStore.reload()
+        RecurringPurchaseStore.reload()
         return true
     }
 }

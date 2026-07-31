@@ -49,6 +49,45 @@ object PurchaseStore {
         persist()
     }
 
+    /**
+     * 대회 기록의 기본 참가비·이벤트 추가금을 구매 내역과 동기화한다.
+     * 기록을 저장할 때마다 호출되며, 금액이 바뀌면 연결된 구매 내역도 함께 갱신되고
+     * 금액이 비워지면 해당 구매 내역은 삭제된다. id를 결정적으로 고정해 중복 생성을 막는다.
+     */
+    fun syncRaceFees(record: RaceRecord) {
+        syncFee("entryfee:${record.id}", record.baseFeeAmount, record, "기본 참가비", "")
+        syncFee("eventfee:${record.id}", record.eventFeeAmount, record, "이벤트 추가금", record.eventNote)
+    }
+
+    private fun syncFee(id: String, amount: Long, record: RaceRecord, defaultVendor: String, defaultMemo: String) {
+        if (amount <= 0) {
+            if (find(id) != null) delete(id)
+            return
+        }
+        val existing = find(id)
+        upsert(
+            Purchase(
+                id = id,
+                dateEpochDay = record.dateEpochDay,
+                // 카테고리·구입처·메모는 사용자가 구매 탭에서 직접 고쳤을 수 있으니 유지하고,
+                // 금액·날짜·연결 대회만 대회 기록 쪽을 기준으로 계속 맞춘다.
+                category = existing?.category ?: PurchaseCategory.ENTRY_FEE,
+                amount = amount,
+                vendor = existing?.vendor?.takeIf { it.isNotBlank() } ?: defaultVendor,
+                memo = existing?.memo?.takeIf { it.isNotBlank() } ?: defaultMemo,
+                receiptPath = existing?.receiptPath ?: "",
+                linkedRecordId = record.id,
+                createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+            ),
+        )
+    }
+
+    /** 대회 기록 삭제 시 연결된 참가비·이벤트 추가금 구매 내역도 함께 지운다. */
+    fun deleteFeesForRecord(recordId: String) {
+        delete("entryfee:$recordId")
+        delete("eventfee:$recordId")
+    }
+
     /** 영수증으로 참조 중인 이미지 파일명 (RecordStore 고아 이미지 정리·백업에서 함께 쓰임) */
     fun referencedImageNames(): Set<String> =
         purchases.mapNotNull { it.receiptPath.takeIf { p -> p.isNotBlank() } }

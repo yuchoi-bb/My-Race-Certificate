@@ -34,6 +34,8 @@ import com.yuchoi.racecert.ui.PurchaseEditScreen
 import com.yuchoi.racecert.ui.PurchaseListScreen
 import com.yuchoi.racecert.ui.RecordDetailScreen
 import com.yuchoi.racecert.ui.RecordListScreen
+import com.yuchoi.racecert.ui.RecurringPurchaseEditScreen
+import com.yuchoi.racecert.ui.RecurringPurchaseListScreen
 import com.yuchoi.racecert.ui.ShareImportScreen
 import com.yuchoi.racecert.ui.SummaryScreen
 import com.yuchoi.racecert.update.UpdateChecker
@@ -47,6 +49,8 @@ private sealed interface Screen {
     data class AddEdit(val recordId: String?) : Screen
     data class ShareImport(val uris: kotlin.collections.List<Uri>) : Screen
     data class PurchaseEdit(val purchaseId: String?) : Screen
+    data object RecurringList : Screen
+    data class RecurringEdit(val recurringId: String?) : Screen
 }
 
 class MainActivity : ComponentActivity() {
@@ -60,6 +64,11 @@ class MainActivity : ComponentActivity() {
         com.yuchoi.racecert.data.PurchaseStore.init(applicationContext)
         RecordStore.init(applicationContext)
         com.yuchoi.racecert.data.GearTemplateStore.init(applicationContext)
+        com.yuchoi.racecert.data.RecurringPurchaseStore.init(applicationContext)
+        // 기존 기록들의 참가비·이벤트비용을 구매 탭에도 반영(최초 1회 백필)
+        RecordStore.records.forEach { com.yuchoi.racecert.data.PurchaseStore.syncRaceFees(it) }
+        // 정기 지출(동호회 회비 등) 중 오늘까지 밀린 항목을 구매 탭에 채워넣기
+        com.yuchoi.racecert.data.RecurringPurchaseStore.materializeDue()
         // Google 계정이 연결돼 있으면 시작 시 Drive와 자동 동기화
         com.yuchoi.racecert.sync.DriveSync.requestSync(applicationContext)
         updateInstaller = UpdateInstaller(this)
@@ -198,6 +207,7 @@ private fun App(
                         bottomBar = bottomBar,
                         onAddPurchase = { screen = Screen.PurchaseEdit(null) },
                         onOpenPurchase = { screen = Screen.PurchaseEdit(it) },
+                        onOpenRecurring = { screen = Screen.RecurringList },
                     )
                 }
             }
@@ -241,6 +251,23 @@ private fun App(
                 purchaseId = current.purchaseId,
                 onDone = { screen = Screen.List },
                 onCancel = { screen = Screen.List },
+            )
+        }
+
+        is Screen.RecurringList -> {
+            BackHandler { screen = Screen.List }
+            RecurringPurchaseListScreen(
+                onBack = { screen = Screen.List },
+                onAdd = { screen = Screen.RecurringEdit(null) },
+                onOpen = { screen = Screen.RecurringEdit(it) },
+            )
+        }
+
+        is Screen.RecurringEdit -> {
+            RecurringPurchaseEditScreen(
+                recurringId = current.recurringId,
+                onDone = { screen = Screen.RecurringList },
+                onCancel = { screen = Screen.RecurringList },
             )
         }
     }

@@ -664,6 +664,8 @@ fun AddEditRecordScreen(
             gearInitialized = existing?.gearInitialized ?: false,
         )
         RecordStore.upsert(record)
+        // 기본 참가비·이벤트 추가금을 구매 탭에도 자동으로 반영(있으면 갱신, 비면 삭제)
+        com.yuchoi.racecert.data.PurchaseStore.syncRaceFees(record)
         com.yuchoi.racecert.sync.DriveSync.requestSync(context)
         onDone(record.id)
         }

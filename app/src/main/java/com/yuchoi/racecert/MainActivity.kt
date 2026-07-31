@@ -74,6 +74,12 @@ class MainActivity : ComponentActivity() {
         com.yuchoi.racecert.data.RecurringPurchaseStore.materializeDue()
         // Google 계정이 연결돼 있으면 시작 시 Drive와 자동 동기화
         com.yuchoi.racecert.sync.DriveSync.requestSync(applicationContext)
+        // 이미 로그인돼 있으면 화면 없이 Firestore에도 인증해 실시간 동기화 리스너를 켠다
+        com.yuchoi.racecert.sync.DriveSync.silentSignIn(applicationContext) { account ->
+            account?.idToken?.let { token ->
+                com.yuchoi.racecert.sync.FirestoreSync.signInWithGoogleIdToken(token, applicationContext)
+            }
+        }
         updateInstaller = UpdateInstaller(this)
         updateInstaller.register()
 

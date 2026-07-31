@@ -42,6 +42,7 @@ import com.yuchoi.racecert.data.BackupManager
 import com.yuchoi.racecert.data.PbCalc
 import com.yuchoi.racecert.data.RecordStore
 import com.yuchoi.racecert.sync.DriveSync
+import com.yuchoi.racecert.sync.FirestoreSync
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -84,6 +85,7 @@ fun SummaryScreen(
         if (account != null) {
             syncEmail = account.email
             syncStatus = "동기화 중…"
+            FirestoreSync.signInWithGoogleIdToken(account.idToken, context)
             DriveSync.requestSync(context) { r -> syncStatus = syncMessage(r) }
         } else {
             syncStatus = "로그인에 실패했어요. (OAuth 설정/네트워크 확인)"

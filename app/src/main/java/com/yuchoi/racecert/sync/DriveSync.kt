@@ -8,6 +8,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.Scope
+import com.yuchoi.racecert.R
 import com.yuchoi.racecert.data.BackupManager
 import com.yuchoi.racecert.data.RecordStore
 import kotlinx.coroutines.CoroutineScope
@@ -38,14 +39,16 @@ object DriveSync {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
 
-    fun signInOptions(): GoogleSignInOptions =
+    fun signInOptions(context: Context): GoogleSignInOptions =
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
+            // Firestore(FirebaseAuth) 로그인에도 같은 버튼을 쓰기 위한 ID 토큰
+            .requestIdToken(context.getString(R.string.default_web_client_id))
             .requestScopes(Scope(DRIVE_APPDATA))
             .build()
 
     fun client(context: Context): GoogleSignInClient =
-        GoogleSignIn.getClient(context, signInOptions())
+        GoogleSignIn.getClient(context, signInOptions(context))
 
     fun lastAccount(context: Context): GoogleSignInAccount? =
         GoogleSignIn.getLastSignedInAccount(context)
@@ -55,13 +58,22 @@ object DriveSync {
     fun accountFromIntent(data: Intent?): GoogleSignInAccount? =
         runCatching { GoogleSignIn.getSignedInAccountFromIntent(data).result }.getOrNull()
 
+    /** 이미 로그인돼 있으면 화면 없이 최신 ID 토큰을 다시 받아온다(앱 시작 시 Firestore 인증용). */
+    fun silentSignIn(context: Context, onResult: (GoogleSignInAccount?) -> Unit) {
+        client(context).silentSignIn()
+            .addOnSuccessListener { onResult(it) }
+            .addOnFailureListener { onResult(null) }
+    }
+
     fun signOut(context: Context, onDone: () -> Unit) {
+        FirestoreSync.signOut()
         client(context).signOut().addOnCompleteListener { onDone() }
     }
 
     /** 로그인 직후/앱 시작/저장 후 호출. 백그라운드에서 동기화하고 결과를 콜백으로 알린다. */
     fun requestSync(context: Context, onResult: ((SyncResult) -> Unit)? = null) {
         val appContext = context.applicationContext
+        FirestoreSync.requestSync(appContext)
         scope.launch {
             val result = mutex.withLock { runSync(appContext) }
             onResult?.let { cb -> withContext(Dispatchers.Main) { cb(result) } }

@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "515985175637",
+    "project_id": "my-race-certificate",
+    "storage_bucket": "my-race-certificate.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:515985175637:android:17e2253b93df6e69a090dc",
+        "android_client_info": {
+          "package_name": "com.yuchoi.racecert"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "515985175637-8ndr7qndi3tglemhnlpkn6u39qi8of5d.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.yuchoi.racecert",
+            "certificate_hash": "40f1f63445f2ba9fccbc4a06b53182919a98031f"
+          }
+        },
+        {
+          "client_id": "515985175637-9gmo0tn5141s3g8fq4kh79hfi65s1ou2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAx7HOiMVSJL0UZhrukRyVbjYiFGmVa_jo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "515985175637-9gmo0tn5141s3g8fq4kh79hfi65s1ou2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.gms.google-services")
 }
 
 // CI passes -PbuildNumber=<GitHub run number>; local builds default to 1.
@@ -73,4 +74,8 @@ dependencies {
     implementation("com.google.android.gms:play-services-auth:21.2.0")
     // 헬스커넥트: 삼성헬스/가민커넥트가 넣어둔 몸무게·체지방 읽기
     implementation("androidx.health.connect:connect-client:1.1.0-rc03")
+    // Firestore: 여러 기기 간 실시간 동기화
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-auth-ktx")
 }

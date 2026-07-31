@@ -1,12 +1,8 @@
 package com.yuchoi.racecert.sync
 
 import android.content.Context
-import android.util.Log
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
-import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.firestore.FirebaseFirestore
 import com.yuchoi.racecert.data.PurchaseCategoryStore
 import com.yuchoi.racecert.data.PurchaseStore
@@ -17,11 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
-private const val TAG = "FirestoreSync"
+private const val TAG = "Firestore"
 
 /**
  * Firestore를 이용해 records.json·purchases.json·recurring_purchases.json·
@@ -31,7 +24,7 @@ private const val TAG = "FirestoreSync"
  * 스냅샷 리스너로 원격 변경을 즉시 받아 로컬 파일에 반영한다. Google Drive
  * 백업(zip, 이미지 포함)과는 별개로 동작하며 데이터(텍스트)만 실시간으로 맞춘다.
  *
- * 진단용: [debugLog]에 모든 단계를 사람이 읽을 수 있는 문장으로 남긴다(logcat 없이도
+ * 진단용: 모든 단계를 [SyncDebugLog]에 사람이 읽을 수 있는 문장으로 남긴다(logcat 없이도
  * 화면에서 바로 무엇이 실패했는지 볼 수 있도록, SummaryScreen에 표시한다).
  */
 object FirestoreSync {
@@ -55,31 +48,8 @@ object FirestoreSync {
         ),
     )
 
-    /** 화면에 그대로 띄울 수 있는 진단 로그. 최신 항목이 맨 앞. */
-    val debugLog: SnapshotStateList<String> = mutableStateListOf()
-
-    private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.KOREAN)
-
-    private fun log(msg: String) {
-        val line = "[${timeFormat.format(Date())}] $msg"
-        Log.d(TAG, msg)
-        runCatching { FirebaseCrashlytics.getInstance().log("[$TAG] $msg") }
-        debugLog.add(0, line)
-        while (debugLog.size > 200) debugLog.removeAt(debugLog.size - 1)
-    }
-
-    private fun logError(msg: String, t: Throwable) {
-        val detail = "$msg :: ${t.javaClass.simpleName}: ${t.message}"
-        Log.e(TAG, detail, t)
-        runCatching {
-            FirebaseCrashlytics.getInstance().log("[$TAG] $detail")
-            FirebaseCrashlytics.getInstance().recordException(t)
-        }
-        debugLog.add(0, "[${timeFormat.format(Date())}] ❌ $detail")
-        while (debugLog.size > 200) debugLog.removeAt(debugLog.size - 1)
-    }
-
-    fun clearLog() = debugLog.clear()
+    private fun log(msg: String) = SyncDebugLog.log(TAG, msg)
+    private fun logError(msg: String, t: Throwable) = SyncDebugLog.logError(TAG, msg, t)
 
     // FirebaseAuth/FirebaseFirestore 초기화 자체가 프로젝트 설정 문제로 실패할 수 있어,
     // 지연 초기화 시점의 예외도 절대 앱을 죽이지 않도록 runCatching으로 감싼다.

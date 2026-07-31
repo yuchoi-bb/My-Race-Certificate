@@ -43,6 +43,7 @@ import com.yuchoi.racecert.data.PbCalc
 import com.yuchoi.racecert.data.RecordStore
 import com.yuchoi.racecert.sync.DriveSync
 import com.yuchoi.racecert.sync.FirestoreSync
+import com.yuchoi.racecert.sync.SyncDebugLog
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -338,17 +339,17 @@ fun SummaryScreen(
                 }
             }
 
-            item(key = "firestoreDebug") {
-                val debugLog = FirestoreSync.debugLog
+            item(key = "syncDebug") {
+                val debugLog = SyncDebugLog.entries
                 Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                "Firestore 디버그 로그 (${debugLog.size})",
+                                "동기화 디버그 로그 (${debugLog.size})",
                                 style = MaterialTheme.typography.titleSmall,
                                 modifier = Modifier.weight(1f),
                             )
-                            OutlinedButton(onClick = { FirestoreSync.clearLog() }) { Text("지우기") }
+                            OutlinedButton(onClick = { SyncDebugLog.clear() }) { Text("지우기") }
                         }
                         Spacer(Modifier.height(8.dp))
                         if (debugLog.isEmpty()) {

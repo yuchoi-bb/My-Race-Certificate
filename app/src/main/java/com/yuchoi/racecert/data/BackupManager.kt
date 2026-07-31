@@ -117,7 +117,8 @@ object BackupManager {
     private fun readZip(context: Context, input: InputStream): Boolean {
         val images = imagesDir(context)
         val imagesRoot = images.canonicalPath + File.separator
-        var foundJson = false
+        var foundRecords = false
+        var foundPurchases = false
         ZipInputStream(input).use { zip ->
             var entry: ZipEntry? = zip.nextEntry
             while (entry != null) {
@@ -125,10 +126,11 @@ object BackupManager {
                 when {
                     name == "records.json" -> {
                         dataFile(context).outputStream().use { zip.copyTo(it) }
-                        foundJson = true
+                        foundRecords = true
                     }
                     name == "purchases.json" -> {
                         purchasesFile(context).outputStream().use { zip.copyTo(it) }
+                        foundPurchases = true
                     }
                     name.startsWith("images/") && !entry.isDirectory -> {
                         // 파일명만 취하고, 최종 경로가 images 폴더 안인지 확인 (Zip Slip 방어)
@@ -143,7 +145,8 @@ object BackupManager {
                 entry = zip.nextEntry
             }
         }
-        if (!foundJson) return false
+        // records.json이나 purchases.json 둘 중 하나만 있어도(구매 전용 백업 등) 성공으로 처리한다.
+        if (!foundRecords && !foundPurchases) return false
         RecordStore.reload()
         PurchaseStore.reload()
         return true
